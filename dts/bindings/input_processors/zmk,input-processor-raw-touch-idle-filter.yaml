@@ -16,6 +16,14 @@ description: |
   Place it LAST in the chain, after every scaler, mapper and temp-layer
   processor, so it sees final values and does not starve them of events.
 
+  Each devicetree node carries one instance of the "has anything been
+  accumulated since the last sync" flag. Referencing the same node from a
+  listener's base chain and from its layer overlays is fine - only one of
+  those chains handles any given event, and a sync group does not
+  normally straddle a layer change. Referencing it from two DIFFERENT
+  listeners is not: their event streams interleave and would corrupt each
+  other's flag. Declare a second node for a second pad.
+
 compatible: "zmk,input-processor-raw-touch-idle-filter"
 
 include: ip_zero_param.yaml
