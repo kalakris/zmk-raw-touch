@@ -260,10 +260,12 @@ static void raw_touch_input_event(const struct raw_touch_pad_config *cfg,
      * the discard happens before the second event of the frame is even
      * dispatched, no mark belonging to this frame can be lost with it.
      */
+    bool marked = zmk_raw_touch_scroll_take(cfg->dev);
+
     if (data->frame_open) {
-        data->frame_scroll = data->frame_scroll || zmk_raw_touch_scroll_take(cfg->dev);
+        data->frame_scroll = data->frame_scroll || marked;
     } else {
-        zmk_raw_touch_scroll_take(cfg->dev);
+        /* First event of a frame: `marked` belongs to the previous one. */
         data->frame_scroll = false;
         data->frame_open = true;
     }
