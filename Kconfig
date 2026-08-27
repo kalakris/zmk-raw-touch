@@ -27,6 +27,11 @@ config ZMK_RAW_TOUCH_USB
     bool "Send raw touch frames over USB"
     default y
     depends on ZMK_USB
+    # Only the central half talks to the host. The core ZMK_RAW_TOUCH symbol
+    # deliberately does NOT carry this dependency: it also re-injects the
+    # relative deltas that ordinary pointing needs, so compiling it out on a
+    # peripheral would kill the cursor.
+    depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
     help
       Registers a SECOND USB HID interface (HID_1) carrying only the raw
       touch report. Requires CONFIG_USB_HID_DEVICE_COUNT >= 2.
@@ -35,6 +40,7 @@ config ZMK_RAW_TOUCH_BLE
     bool "Send raw touch frames over BLE"
     default y
     depends on ZMK_BLE
+    depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
     help
       Registers a SECOND HID-over-GATT (HIDS) service instance carrying
       only the raw touch report.
@@ -92,6 +98,10 @@ config ZMK_INPUT_PROCESSOR_RAW_TOUCH_IDLE_FILTER
       absolute-mode pad streaming at ~100 Hz does not also emit ~100 Hz
       all-zero mouse HID reports (which on BLE compete with the raw
       stream for connection events).
+
+module = ZMK_RAW_TOUCH
+module-str = ZMK_RAW_TOUCH
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
 
 endmenu
 
