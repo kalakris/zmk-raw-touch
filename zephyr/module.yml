@@ -1,0 +1,4 @@
+name: zmk-raw-touch
+build:
+  cmake: .
+  kconfig: Kconfig
