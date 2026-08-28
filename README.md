@@ -24,7 +24,7 @@ before. On a host without the consumer, the keyboard is just a normal
 trackpad — including a wheel-scroll fallback.
 
 **The host consumer for macOS is a
-[LinearMouse fork](https://github.com/kalakris/linearmouse/tree/go60-inputscale)**
+[LinearMouse fork](https://github.com/kalakris/linearmouse)**
 — see [Host setup](#2-host-setup-macos). Firmware alone only gets you the
 fallback wheel.
 
@@ -83,7 +83,7 @@ Push, let the standard ZMK build workflow produce your firmware, flash.
 Stock LinearMouse does not consume the stream — you need the fork:
 
 ```sh
-git clone -b go60-inputscale https://github.com/kalakris/linearmouse
+git clone https://github.com/kalakris/linearmouse
 cd linearmouse
 Scripts/configure-code-signing   # auto-discovers your Apple Development cert
 xcodebuild -scheme LinearMouse archive -archivePath build/LinearMouse.xcarchive
