@@ -209,8 +209,14 @@ body alone.
 
 ### Input report — 11 bytes
 
-One report per pad sample while touched (~100 Hz on a Cirque Pinnacle),
-plus one release report on lift-off.
+Emitted **only while the sending endpoint's gate claim is live** (see
+[Mode gate](#mode-gate)): one report per pad sample while touched
+(~100 Hz on a Cirque Pinnacle), plus one release report on lift-off.
+While no host has claimed, the stream is silent — nobody is listening,
+and ~100 Hz of 11-byte reports is real BLE airtime — with one exception:
+if the claim clears mid-touch, the firmware emits a single synthetic
+release report (`touched` clear, x/y/z zero, **bit 2 clear**) so the
+host closes out its gesture, then goes silent.
 
 | Offset | Size | Field |
 |---|---|---|
@@ -228,13 +234,19 @@ plus one release report on lift-off.
 bits 3–7 reserved (0).
 
 Bit 2 is computed per frame against the endpoint the frame is sent to:
-it is set iff that endpoint holds a live gate claim, which is also
-exactly when the firmware suppresses its wheel fallback. **Hosts MUST
-synthesize scroll only from frames with bits 1 and 2 both set.** Firmware
-is thereby the single source of truth — wheel and synthesized scroll are
-mutually exclusive by construction, with no host-side racing after
-sleep, reboot or re-pair (a host that has not yet re-claimed sees bit 2
-clear and stays silent while the wheel works).
+it is set iff that endpoint held a live gate claim when the frame was
+sampled, which is also exactly when the firmware suppresses its wheel
+fallback. Because frames are only emitted while claimed, bit 2 is
+implied-set on ordinary frames; the one frame that carries it clear is
+the trailing synthetic release above, which tells the host both that the
+touch is over *and* that the wheel fallback is live again — so the host
+MUST close the gesture without adding lift-off momentum (the finger may
+still be down and scrolling via the wheel; momentum on top would
+double-scroll). **Hosts MUST synthesize scroll only from frames with
+bits 1 and 2 both set.** Firmware is thereby the single source of truth —
+wheel and synthesized scroll are mutually exclusive by construction, with
+no host-side racing after sleep, reboot or re-pair (a host that has not
+yet re-claimed gets no frames and stays silent while the wheel works).
 
 The `touched` bit is normative for contact state — release is `touched`
 clear, not "coordinates are zero" (release reports do also carry zeroed
@@ -303,12 +315,13 @@ BLE the write carries the body alone, as usual. Hosts MUST check
 `capabilities` bit 0 before claiming.
 
 **Effect.** While the claim is live and its endpoint is the one the
-keyboard is sending to, the firmware stops injecting the relative deltas
-for scroll-context frames, which silences any wheel-fallback processor
-chain downstream — and sets frame flags bit 2 to say so. Pointer-context
-deltas, tap-to-click and all key reports are unaffected, and everything
-reverts on the very next frame after the claim clears. Hosts that never
-claim (including the v1 LinearMouse fork) see bit 2 = 0 and the wheel
+keyboard is sending to, the firmware emits the input reports above — and
+stops injecting the relative deltas for scroll-context frames, which
+silences any wheel-fallback processor chain downstream, setting frame
+flags bit 2 to say so. Pointer-context deltas, tap-to-click and all key
+reports are unaffected, and everything reverts on the very next sample
+after the claim clears (with the single trailing release report if that
+happens mid-touch). Hosts that never claim get no frames and the wheel
 fallback keeps working unchanged.
 
 **Endpoint scoping.** A claim is scoped to the endpoint *instance* the
