@@ -17,11 +17,16 @@ that: the pad runs in absolute mode and every sample goes to the host as
 a small vendor HID report at the pad's native rate (~100 Hz), over USB
 and BLE. A host-side consumer turns the frames into real scroll gestures.
 
-Ordinary pointing keeps working the whole time: the module derives
-relative deltas from the frames and re-injects them into the pad's normal
-input chain, so the cursor, wheel overlays and buttons behave exactly as
-before. On a host without the consumer, the keyboard is just a normal
-trackpad — including a wheel-scroll fallback.
+The keyboard has two scrolling modes. In **Standard mode** — no host
+software running — it is just a normal trackpad: the module derives
+relative deltas from the touch samples and re-injects them into the pad's
+normal input chain, so the cursor, tap-to-click, buttons and a
+wheel-scroll processor overlay all work on their own, and the touch
+stream stays silent. When a host consumer claims the stream (see the
+appendix), the keyboard switches to **RawTouch mode**: samples stream to
+the host, which drives scrolling itself, and the firmware's own wheel
+scrolling stands down. The moment the host goes away — quit, crash,
+sleep, disconnect — the keyboard reverts to Standard mode on its own.
 
 **The host consumer for macOS is a
 [LinearMouse fork](https://github.com/kalakris/linearmouse)**
@@ -98,8 +103,9 @@ settings live in LinearMouse's normal per-device configuration.
 ### 3. Verify
 
 Hold your scroll layer and drag the pad: smooth, phased scrolling with
-momentum on lift-off, and a finger back down catches the fling. Quit
-LinearMouse and the same gesture falls back to ordinary wheel scrolling.
+momentum on lift-off, and a finger back down catches the fling — that is
+RawTouch mode. Quit LinearMouse and the keyboard drops back to Standard
+mode: the same gesture scrolls as an ordinary notched wheel.
 
 ## Requirements
 
@@ -173,8 +179,9 @@ tap-to-click tuning) are documented in
   HID service changes the GATT database; hosts with a cached copy will
   not see it.
 - **Re-pair after any firmware update that changes the report layout or
-  the GATT database, too** (e.g. a protocol version bump — or the mode
-  gate's arrival, which made the feature-report characteristic writable).
+  the GATT database, too** (e.g. a protocol version bump — or the
+  host-claim path's arrival, which made the feature-report characteristic
+  writable).
   macOS caches the HOGP report map and GATT structure at pairing time,
   and a change to the map's *contents* does not move any GATT handles, so
   no Service Changed indication fires and the host never re-reads it. The
@@ -209,8 +216,8 @@ body alone.
 
 ### Input report — 11 bytes
 
-Emitted **only while the sending endpoint's gate claim is live** (see
-[Mode gate](#mode-gate)): one report per pad sample while touched
+Emitted **only in RawTouch mode** — while the sending endpoint's host
+claim is live (see [Host claim](#host-claim)): one report per pad sample while touched
 (~100 Hz on a Cirque Pinnacle), plus one release report on lift-off.
 While no host has claimed, the stream is silent — nobody is listening,
 and ~100 Hz of 11-byte reports is real BLE airtime — with one exception:
@@ -229,12 +236,12 @@ host closes out its gesture, then goes silent.
 | 8 | 1 | `seq` — per-pad counter, +1 per emitted report, wraps |
 | 9 | 2 | `timestamp`, little-endian, 100 µs units, wraps at 6.5536 s |
 
-`flags`: bit 0 = touched, bit 1 = scroll mode, bit 2 = gate engaged
-(see [Mode gate](#mode-gate) — 0 unless a host has claimed the stream),
-bits 3–7 reserved (0).
+`flags`: bit 0 = touched, bit 1 = scroll mode, bit 2 = `host_claimed`
+(see [Host claim](#host-claim) — set iff a host claim was live for the
+frame's endpoint when it was sampled), bits 3–7 reserved (0).
 
 Bit 2 is computed per frame against the endpoint the frame is sent to:
-it is set iff that endpoint held a live gate claim when the frame was
+it is set iff that endpoint held a live host claim when the frame was
 sampled, which is also exactly when the firmware suppresses its wheel
 fallback. Because frames are only emitted while claimed, bit 2 is
 implied-set on ordinary frames; the one frame that carries it clear is
@@ -272,7 +279,7 @@ that vendor pair is widely squatted.
 |---|---|---|
 | 0 | 1 | `protocol_version` = 3 |
 | 1 | 1 | `pads_present` bitmask, bit *N* = `pad_id` *N* |
-| 2 | 1 | `capabilities` — bit 0 = mode gate supported; rest reserved (0) |
+| 2 | 1 | `capabilities` — bit 0 = host claim supported; rest reserved (0) |
 | 3 | 1 | reserved (0) |
 | 4 | 8 | pad slot 0 |
 | 12 | 8 | pad slot 1 |
@@ -293,17 +300,18 @@ what to apply. The report descriptor also declares the primary pad's real
 logical ranges on the x/y fields, so generic HID tooling sees true
 geometry without parsing the feature report.
 
-### Mode gate
+### Host claim
 
-The protocol's only host→device path (still protocol v3 — the gate is
-advertised by `capabilities` bit 0, not a version bump). A host that
-consumes the stream **claims** it by writing the feature report — USB
+How a host switches the keyboard into RawTouch mode — and the protocol's
+only host→device path (still protocol v3 — the claim is advertised by
+`capabilities` bit 0, not a version bump). A host that consumes the
+stream **claims** it by writing the feature report — USB
 `SET_REPORT(FEATURE)` or a GATT write to the BLE feature-report
 characteristic — with a 4-byte command body:
 
 | Offset | Size | Field |
 |---|---|---|
-| 0 | 1 | command — `0x01` = gate claim |
+| 0 | 1 | command — `0x01` = host claim |
 | 1 | 1 | `0x01` = claim/refresh, `0x00` = release |
 | 2 | 1 | timeout in seconds; firmware clamps to [5, 120]; `0` rejected (ignored on release) |
 | 3 | 1 | reserved, must be 0 |
@@ -350,8 +358,8 @@ longer than its own stated timeout.
 
 **BLE cache note.** Making the feature characteristic writable changes
 only a characteristic *permission*, not the report map or attribute
-layout — **bench-verified 2026-08-29 that a host paired against pre-gate
-firmware claims, gates, and releases correctly with no re-pair**. The
+layout — **bench-verified 2026-08-29 that a host paired against
+pre-claim firmware claims and releases correctly with no re-pair**. The
 forget + re-pair rule still applies to any change that touches the
 report map or GATT attribute layout (see Known issues — that failure
 mode is deceptively partial).
