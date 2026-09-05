@@ -193,7 +193,9 @@ tap-to-click tuning) are documented in
   HID service changes the GATT database; hosts with a cached copy will
   not see it.
 - **Re-pair after any firmware update that changes the report layout or
-  the GATT attribute layout, too** (e.g. a protocol version bump). macOS
+  the GATT attribute layout, too** (e.g. a protocol version bump, or
+  adding/removing a trackpad — the feature report carries one 8-byte slot
+  per pad, so the pad count is part of the report map). macOS
   caches the HOGP report map and GATT structure at pairing time, and a
   change to the map's *contents* does not move any GATT handles, so no
   Service Changed indication fires and the host never re-reads it. The
@@ -319,14 +321,23 @@ the firmware cannot cover (link loss, disconnect, host sleep, the
 keyboard losing power mid-touch), not as a correctness requirement on a
 healthy link.
 
-### Feature report — 20 bytes, same report ID
+### Feature report — 4 + 8×*N* bytes, same report ID
 
 Readable over USB `GET_REPORT(FEATURE)` and the BLE feature report
-characteristic (report-reference type `0x03`). Over USB the response is
-**21 bytes**: the report ID (`0x04`) followed by the 20-byte body; over
-BLE the characteristic read returns the 20-byte body alone. **Hosts MUST
-read and validate this report before treating a `0xFF00`/`0x01`
-collection as this protocol** — that vendor pair is widely squatted.
+characteristic (report-reference type `0x03`). The body is a 4-byte
+header plus one 8-byte slot per pad the firmware was built with, so its
+length is **4 + 8×*N***, 1 ≤ *N* ≤ 8. Over USB the response additionally
+carries the report ID (`0x04`) as its first byte, making it 5 + 8×*N*;
+over BLE the characteristic read returns the body alone. On a two-pad
+build such as the reference Go60 that is **20 bytes** (21 over USB) —
+the sizes earlier revisions of this document hard-coded.
+
+**Hosts MUST accept any body length ≥ 12 that is 4 + 8×*N***, recover
+*N* as `(length − 4) / 8`, and read `min(N, popcount(pads_present))`
+slots. A host that requires exactly 20 bytes will refuse a one-pad or
+three-pad keyboard running the same firmware. **Hosts MUST read and
+validate this report before treating a `0xFF00`/`0x01` collection as
+this protocol** — that vendor pair is widely squatted.
 
 | Offset | Size | Field |
 |---|---|---|
@@ -334,13 +345,14 @@ collection as this protocol** — that vendor pair is widely squatted.
 | 1 | 1 | `pads_present` bitmask, bit *N* = `pad_id` *N* |
 | 2 | 1 | `capabilities` — bit 0 = host claim supported; rest reserved (0) |
 | 3 | 1 | reserved (0) |
-| 4 | 8 | pad slot 0 |
-| 12 | 8 | pad slot 1 |
+| 4 + 8×*i* | 8 | pad slot *i*, for 0 ≤ *i* < *N* |
 
-Slots describe present pads in ascending `pad_id` order. **At most two
-pads are described**: a third or later pad still sets its `pads_present`
-bit but has no slot, and hosts MUST NOT assume slot *i* corresponds to
-the *i*-th set bit beyond index 1. Each slot:
+Slots describe present pads in ascending `pad_id` order. There is one
+slot per pad, so on any build of eight pads or fewer every present pad is
+described; `pads_present` can only outrun the slots past eight pads,
+where the extra pads set their bit but get no slot. Hosts MUST NOT assume
+slot *i* corresponds to the *i*-th set bit beyond the slots they actually
+received. Each slot:
 
 | Offset | Size | Field |
 |---|---|---|
@@ -356,6 +368,13 @@ what to apply. The report descriptor also declares real logical ranges on
 the x/y fields — those of one pad node (the only one, on a single-pad
 build) — so generic HID tooling sees true geometry without parsing the
 feature report. Multi-pad hosts must use the slots.
+
+*N* is the pad count of the firmware, not a runtime value, so it is baked
+into the HID report descriptor's feature `REPORT_COUNT`. **Adding or
+removing a pad is therefore a report-map change and needs a Bluetooth
+forget + re-pair on macOS** (see [Known issues](#known-issues) — the
+failure is deceptively partial: USB and the live-read feature report keep
+working while BLE frame parsing dies).
 
 ### Host claim
 
