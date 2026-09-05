@@ -178,7 +178,7 @@ One filter node per listener — do not share a node between two listeners.
 | `CONFIG_ZMK_RAW_TOUCH` | y if a pad node exists | The module |
 | `CONFIG_ZMK_RAW_TOUCH_USB` | y | Second USB HID interface (`HID_1`) |
 | `CONFIG_ZMK_RAW_TOUCH_BLE` | y | Second BLE HIDS instance |
-| `CONFIG_ZMK_RAW_TOUCH_BLE_QUEUE_SIZE` | 30 | Frames buffered for BLE (when full the oldest *motion* frame is evicted; release frames are never evicted) |
+| `CONFIG_ZMK_RAW_TOUCH_BLE_QUEUE_SIZE` | 8 | Frames buffered for BLE — ~80 ms, enough for arrival batching (when full the oldest *motion* frame is evicted; release frames are never evicted) |
 | `CONFIG_ZMK_RAW_TOUCH_BLE_THREAD_STACK_SIZE` | `ZMK_BLE_THREAD_STACK_SIZE` | Stack of the module's BLE send work queue |
 | `CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SCROLL_MAX_DEVICES` | 4 | Input devices the scroll marker can track |
 | `CONFIG_ZMK_RAW_TOUCH_LOG_LEVEL_*` | inherits | Module log level |
