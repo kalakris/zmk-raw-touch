@@ -31,6 +31,14 @@
  * (~100 Hz), plus exactly one release frame (touched = 0, z = 0) on
  * lift-off. */
 
+/* Touched. Clear marks a RELEASE frame - the one emitted at lift-off, and
+ * the single synthetic one emitted when a host claim clears mid-touch.
+ * Release frames are the only frames whose delivery matters: a lost one
+ * leaves the host holding a phantom finger-down. The transports treat
+ * them as durable - the BLE queue evicts motion frames rather than a
+ * release and retries a release that fails to notify, in order (see
+ * zmk_raw_touch_hog_send_report() in zmk/raw_touch/transport.h). Motion
+ * frames may still be dropped under pressure; `seq` exposes that. */
 #define ZMK_RAW_TOUCH_FLAGS_TOUCHED BIT(0)
 #define ZMK_RAW_TOUCH_FLAGS_SCROLL_MODE BIT(1)
 /* Host claimed: set iff the endpoint this frame is being sent to held a

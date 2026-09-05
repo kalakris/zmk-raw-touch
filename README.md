@@ -178,7 +178,7 @@ One filter node per listener — do not share a node between two listeners.
 | `CONFIG_ZMK_RAW_TOUCH` | y if a pad node exists | The module |
 | `CONFIG_ZMK_RAW_TOUCH_USB` | y | Second USB HID interface (`HID_1`) |
 | `CONFIG_ZMK_RAW_TOUCH_BLE` | y | Second BLE HIDS instance |
-| `CONFIG_ZMK_RAW_TOUCH_BLE_QUEUE_SIZE` | 30 | Frames buffered for BLE (oldest dropped when full) |
+| `CONFIG_ZMK_RAW_TOUCH_BLE_QUEUE_SIZE` | 30 | Frames buffered for BLE (when full the oldest *motion* frame is evicted; release frames are never evicted) |
 | `CONFIG_ZMK_RAW_TOUCH_BLE_THREAD_STACK_SIZE` | `ZMK_BLE_THREAD_STACK_SIZE` | Stack of the module's BLE send work queue |
 | `CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SCROLL_MAX_DEVICES` | 4 | Input devices the scroll marker can track |
 | `CONFIG_ZMK_RAW_TOUCH_LOG_LEVEL_*` | inherits | Module log level |
@@ -292,13 +292,32 @@ clear, not "coordinates are zero" (release reports do also carry zeroed
 x/y/z, but hosts MUST key on the bit). `timestamp` is the device-side
 sample time (HID Scan Time convention); hosts MUST derive finger velocity
 from it rather than from arrival time, which BLE connection-interval
-batching distorts. `seq` exposes silent drops (the BLE send queue drops
-oldest under pressure); with device timestamps, velocity across a gap
-remains correct, so `seq` is diagnostic.
+batching distorts. `seq` exposes silent drops (under pressure the BLE
+send queue drops the oldest *motion* frame — see below); with device
+timestamps, velocity across a gap remains correct, so `seq` is
+diagnostic.
 
-**Host requirement:** a release report can itself be dropped. Hosts MUST
-treat frame silence longer than ~150 ms while `touched` was last set as a
-lift-off.
+**Release frames are delivered.** A report with `touched` clear — the
+lift-off report, and the synthetic one from a mid-touch declaim — is the
+one report whose loss is visible to a user, as a phantom finger-down and
+runaway momentum. The firmware treats it as durable rather than
+best-effort:
+
+- a full BLE send queue evicts the oldest *motion* frame, never a
+  release; motion frames are ~10 ms apart and carry absolute positions,
+  so a gap costs nothing;
+- a release that fails to notify (typically because no TX buffer is free
+  this connection event) is retried, one connection interval apart, a few
+  times before being given up on;
+- retries are head-of-line and the queue drains in order, so per pad a
+  release never overtakes earlier motion, and a later touch's frames
+  never overtake the release that closed the previous one.
+
+Hosts SHOULD still treat frame silence longer than ~150 ms while
+`touched` was last set as a lift-off — but as a **safety net** for what
+the firmware cannot cover (link loss, disconnect, host sleep, the
+keyboard losing power mid-touch), not as a correctness requirement on a
+healthy link.
 
 ### Feature report — 20 bytes, same report ID
 
