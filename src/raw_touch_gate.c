@@ -28,10 +28,22 @@
  *
  * Threading: claim writes arrive on the USB workqueue or the BT RX
  * thread, expiry runs on the system workqueue, and the engaged check runs
- * on the input dispatch path. The state is a couple of booleans guarded
- * by a spinlock; the expiry handler re-checks k_work_delayable_is_pending
- * under the lock so an in-flight expiry cannot clear a claim that a
- * concurrent refresh just re-armed.
+ * on the input dispatch path. A slot's state and its timer move together
+ * under gate_lock: whoever sets `engaged` arms the expiry in the same
+ * critical section, and whoever clears it cancels the expiry there too.
+ * Split across two critical sections they can be interleaved into a claim
+ * that is engaged with no expiry armed (so it never expires) or cleared
+ * with one still armed. Both k_work_reschedule() and
+ * k_work_cancel_delayable() are ISR-safe and non-blocking, which is what
+ * makes holding them under a spinlock legal; their _sync variants are
+ * not, and must never appear here.
+ *
+ * gate_expiry_cb() cannot be brought under that rule -- it IS the timer --
+ * so it stays as it was: it takes gate_lock and then re-reads the work's
+ * busy flags, declining to clear a claim whose expiry a concurrent
+ * refresh has just re-armed. The lock order is the same on every path
+ * (gate_lock, then the kernel's own work-queue lock inside the k_work_*
+ * call), so the two can never deadlock against each other.
  */
 
 #include <errno.h>
@@ -91,12 +103,18 @@ static void gate_clear_index(int idx, const char *reason) {
     K_SPINLOCK(&gate_lock) {
         if (claim->engaged) {
             claim->engaged = false;
+            /* Inside the lock, with the flag: a claim arriving between the
+             * two would otherwise have its freshly armed expiry cancelled
+             * here, leaving it engaged forever. k_work_cancel_delayable()
+             * is ISR-safe and non-blocking, so it is legal under a
+             * spinlock -- unlike its _sync variant, which waits for a
+             * running handler and must never be called from here. */
+            k_work_cancel_delayable(&claim->expiry_work);
             cleared = true;
         }
     }
 
     if (cleared) {
-        k_work_cancel_delayable(&claim->expiry_work);
         LOG_INF("Raw touch host claim for endpoint %d cleared (%s)", idx, reason);
     }
 }
@@ -172,12 +190,17 @@ int zmk_raw_touch_gate_handle_command(struct zmk_endpoint_instance source, const
         K_SPINLOCK(&gate_lock) {
             refresh = claim->engaged;
             claim->engaged = true;
-        }
 
-        /* Re-arm the expiry AFTER engaging, so an in-flight expiry either
-         * sees the delayable pending again or has already cleared the old
-         * claim before this one was recorded. */
-        k_work_reschedule(&claim->expiry_work, K_SECONDS(timeout_s));
+            /* Re-armed under the same lock as the flag, and after setting
+             * it, so an expiry racing this claim either sees the delayable
+             * pending again (and declines to clear) or has already cleared
+             * the old claim before this one was recorded -- and a clear
+             * racing it cannot cancel this expiry after the fact.
+             * k_work_reschedule() is ISR-safe and non-blocking, so it is
+             * legal under a spinlock; the _sync variants, which wait for a
+             * running handler, are not. */
+            k_work_reschedule(&claim->expiry_work, K_SECONDS(timeout_s));
+        }
 
         if (!refresh) {
             LOG_INF("Raw touch frames claimed by %s (timeout %us); wheel fallback suppressed "
