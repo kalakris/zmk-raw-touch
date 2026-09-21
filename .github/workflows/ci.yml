@@ -1,0 +1,48 @@
+# Two checks on every push and pull request:
+#
+#   readme-examples  The README's configuration blocks are copies of the
+#                    files under examples/ (and its diff blocks are
+#                    generated from them). scripts/check-readme-examples.py
+#                    fails if either has drifted; run it with --write to
+#                    refresh the README from the files.
+#
+#   firmware         The examples compile. ci/ is a ZMK config directory
+#                    that includes them for the MoErgo Go60, the one board
+#                    the module has been verified on, against the exact
+#                    ZMK tree and Cirque driver revisions the README's
+#                    compatibility table names. Both halves are built so
+#                    every compile path is covered: USB and BLE transports
+#                    on the central, the split stamp on the peripheral, and
+#                    all three input processors. The resulting UF2s are
+#                    uploaded as the run's artifact.
+#
+# The firmware job reuses ZMK's own user-config workflow, which passes this
+# checkout as an extra module. Anyone can reproduce it locally: see
+# ci/build.yaml for the west and cmake invocation.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readme-examples:
+    name: README examples match examples/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: python3 scripts/check-readme-examples.py
+
+  firmware:
+    name: Example firmware
+    permissions:
+      contents: read
+    uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@v0.3
+    with:
+      config_path: ci
+      build_matrix_path: ci/build.yaml
+      archive_name: go60-example-firmware
