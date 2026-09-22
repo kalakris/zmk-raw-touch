@@ -79,6 +79,20 @@ Other boards and drivers need integration and testing. Upstream ZMK
 uses Zephyr's legacy USB stack; `USB_DEVICE_STACK_NEXT` requires a port.
 Check this before adding the module to an existing build.
 
+### Versioning
+
+The module is semantically versioned from git tags, starting at `v0.1.0`.
+It is pre-1.0, so a minor release may change interfaces.
+[`include/zmk/raw_touch/version.h`](include/zmk/raw_touch/version.h) is the
+single source of truth for the number: the firmware reports it in the
+feature report, and CI fails a `v*` tag whose major.minor disagrees with it.
+
+The protocol version is the only compatibility contract with a host. The
+module version is diagnostic — useful for a bug report, and for seeing
+which build each half of a split is running, but never something a host
+should parse the wire by. Today's pairing is RawTouch 0.1.x ↔ protocol 3 ↔
+module 0.1.x.
+
 ### Driver requirements
 
 The module does not depend on a particular sensor driver, but it does
@@ -596,11 +610,18 @@ from (up to one poll cycle on a polled wired link — see
 peripheral only; its cell is the relay's own `reg`. The processor sends one
 extra input event per frame through the relay, just ahead of the frame's
 sync; the central's frame handler uses its value in place of its own clock
-and needs no configuration. Nothing on the wire to the host changes. The
-stamp is in the peripheral's clock domain, which is fine for hosts that
-follow the protocol (one timeline per pad, see the
+and needs no configuration. The stamp itself changes nothing on the wire
+to the host, and it is in the peripheral's clock domain, which is fine for
+hosts that follow the protocol (one timeline per pad, see the
 [appendix](#input-report)). Both halves must run a build that includes the
 module.
+
+The same processor also announces the peripheral's own module version,
+ahead of the first frame of each touch. The central publishes it in that
+pad's feature-report slot, so a host reading the feature report sees the
+build each half runs and not just the central's (see
+[Versioning](#versioning) and the [appendix](#feature-report)). That slot
+reads 0, for unknown, until the first touch after boot.
 
 ### Central: process the relayed touch samples
 
@@ -1068,7 +1089,7 @@ hard-code the two-pad length.
 | 0 | 1 | `protocol_version`, 3 |
 | 1 | 1 | `pads_present`, bit `p` set for pad ID `p` |
 | 2 | 1 | `capabilities`, bit 0 = host claim supported; other bits reserved |
-| 3 | 1 | reserved, zero |
+| 3 | 1 | `module_version` of the half answering, packed major.minor; 0 = unknown |
 | 4 + 8 × i | 8 | Geometry slot `i` |
 
 For a valid firmware configuration, slots describe the present pads in
@@ -1090,11 +1111,18 @@ Each slot contains:
 | +2 | 2 | `x_max`, unsigned little-endian |
 | +4 | 2 | `y_max`, unsigned little-endian |
 | +6 | 1 | `max_contacts`, currently 1 |
-| +7 | 1 | reserved, zero |
+| +7 | 1 | `module_version` of the half that owns the pad, packed; 0 = unknown |
 
 Orientation applies after reading raw coordinates: swap axes first,
 then apply axis inversions. The HID descriptor also declares coordinate
 ranges from one pad node; use the per-pad feature slots when pads differ.
+
+Both module versions pack major in the high nibble and minor in the low
+one: `0x01` is 0.1 and `0x10` is 1.0. Byte 3 is the half that answers the
+report, the central. A slot's byte 7 is the half that owns that pad, which
+for a pad relayed from a split peripheral is the peripheral — 0 until it
+announces its version, which it does with the first frame of a touch.
+Treat both as diagnostic: `protocol_version` is the compatibility contract.
 
 The configured pad count determines the descriptor's feature-report
 length. Adding or removing a pad therefore changes the report map and
