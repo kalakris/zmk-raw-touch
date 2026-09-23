@@ -623,12 +623,13 @@ hosts that follow the protocol (one timeline per pad, see the
 [appendix](#input-report)). Both halves must run a build that includes the
 module.
 
-The same processor also announces the peripheral's own module version,
-ahead of the first frame of each touch. The central publishes it in that
-pad's feature-report slot, so a host reading the feature report sees the
-build each half runs and not just the central's (see
-[Versioning](#versioning) and the [appendix](#feature-report)). That slot
-reads 0, for unknown, until the first touch after boot.
+The same processor also announces the peripheral's own module version
+before its first frame after boot, then before the next frame after any
+gap of at least 500 ms. Rapid successive touches do not each send an
+announcement. The central publishes the version in that pad's
+feature-report slot, so a host can read the build each half runs (see
+[Versioning](#versioning) and the [appendix](#feature-report)). The slot
+reads 0, for unknown, until an announcement arrives.
 
 ### Central: process the relayed touch samples
 
@@ -1156,8 +1157,9 @@ ranges from one pad node; use the per-pad feature slots when pads differ.
 Both module versions pack major in the high nibble and minor in the low
 one: `0x01` is 0.1 and `0x10` is 1.0. Byte 3 is the half that answers the
 report, the central. A slot's byte 7 is the half that owns that pad, which
-for a pad relayed from a split peripheral is the peripheral — 0 until it
-announces its version, which it does with the first frame of a touch.
+for a pad relayed from a split peripheral is the peripheral — 0 until its
+version announcement arrives. The peripheral announces before its first
+frame after boot and before the next frame after a gap of at least 500 ms.
 Treat both as diagnostic: `protocol_version` is the compatibility contract.
 
 The configured pad count determines the descriptor's feature-report
