@@ -93,12 +93,9 @@ which build each half of a split is running, but never something a host
 should parse the wire by. Today's pairing is RawTouch 0.1.x ↔ protocol 4 ↔
 module 0.2.x.
 
-Protocol 4 added the feature report's four identification bytes and an
-eight-byte device id, moving the geometry slots by twelve bytes; there is
-no protocol 3 compatibility in either the firmware or RawTouch. It is a report-map change, so hosts that
-cache the map — macOS over Bluetooth — need a forget and re-pair after
-upgrading, exactly as when a pad is added or removed
-(see [Troubleshooting](#troubleshooting)).
+Changes to the HID report map, including adding or removing a pad,
+require a fresh Bluetooth pairing on hosts that cache the map, including
+macOS (see [Troubleshooting](#troubleshooting)).
 
 ### Driver requirements
 
