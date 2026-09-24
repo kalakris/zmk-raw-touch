@@ -930,7 +930,6 @@ All names below have the `CONFIG_` prefix in a `.conf` file.
 | `ZMK_RAW_TOUCH_USB_QUEUE_SIZE` | `4` | Buffered USB frames; range 2–255. |
 | `ZMK_RAW_TOUCH_BLE_QUEUE_SIZE` | `8` | Buffered BLE frames; range 2–255. |
 | `ZMK_RAW_TOUCH_BLE_THREAD_STACK_SIZE` | `ZMK_BLE_THREAD_STACK_SIZE` | Stack for the module's BLE work queue. |
-| `ZMK_INPUT_PROCESSOR_RAW_TOUCH_SCROLL_MAX_DEVICES` | `4` | Input devices tracked by the scroll marker. Increase when using more marked devices. |
 | `ZMK_RAW_TOUCH_LOG_LEVEL_*` | inherited | Module logging level. |
 
 The marker, idle-filter and stamp processors enable automatically when

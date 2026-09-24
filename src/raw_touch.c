@@ -113,6 +113,11 @@ struct raw_touch_pad_data {
     uint16_t cur_x, cur_y;
     uint8_t cur_z;
 
+    /* Set by the scroll marker (zmk_raw_touch_scroll_mark()) when a chain
+     * containing it handles an event from this pad's device; taken on
+     * every event of the pad's own. */
+    atomic_t scroll_marked;
+
     /* Scroll-context marks seen while accumulating the current frame. */
     bool frame_open;
     bool frame_scroll;
@@ -500,7 +505,7 @@ static void raw_touch_input_event(const struct raw_touch_pad_config *cfg,
      * the discard happens before the second event of the frame is even
      * dispatched, no mark belonging to this frame can be lost with it.
      */
-    bool marked = zmk_raw_touch_scroll_take(cfg->dev);
+    bool marked = atomic_clear(&data->scroll_marked);
 
     if (data->frame_open) {
         data->frame_scroll = data->frame_scroll || marked;
@@ -557,10 +562,21 @@ DT_INST_FOREACH_STATUS_OKAY(RT_INST)
 static const struct raw_touch_pad_config *const raw_touch_pads[] = {
     DT_INST_FOREACH_STATUS_OKAY(RT_CONFIG_REF)};
 
-/* Parallel to raw_touch_pads: same pad, same index. Only raw_touch_init()
- * needs it, to hand each pad the feature slot it was given. */
+/* Parallel to raw_touch_pads: same pad, same index. For the entry points
+ * that arrive from outside a pad's own input callback. */
 static struct raw_touch_pad_data *const raw_touch_pad_datas[] = {
     DT_INST_FOREACH_STATUS_OKAY(RT_DATA_REF)};
+
+/* Runs in the input thread, from inside a listener's processor chain. A
+ * device that feeds no pad (a marked chain on some other pointing device)
+ * matches nothing and is ignored. */
+void zmk_raw_touch_scroll_mark(const struct device *dev) {
+    for (size_t i = 0; i < ARRAY_SIZE(raw_touch_pads); i++) {
+        if (raw_touch_pads[i]->dev == dev) {
+            atomic_set(&raw_touch_pad_datas[i]->scroll_marked, 1);
+        }
+    }
+}
 
 int zmk_raw_touch_tap_confirm(uint8_t pad_id) {
     for (size_t i = 0; i < ARRAY_SIZE(raw_touch_pads); i++) {
