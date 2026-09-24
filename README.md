@@ -907,7 +907,7 @@ Each `zmk,raw-touch-pad` node describes one input device. See the
 | `x-invert` / `y-invert` | absent | Invert the corresponding pointer axis after the swap; advertise the flags to the host. |
 | `tap-click` | absent | Enable firmware tap-to-click. |
 | `tap-click-while-scrolling` | absent | Also report taps for scroll-context touches (dedicated scrolling pads); held for host confirmation in RawTouch mode. Requires `tap-click`. |
-| `tap-max-ms` | `180` | Maximum touch duration counted as a tap. |
+| `tap-max-ms` | `180` | Maximum touch duration counted as a tap; at most 5000. |
 | `tap-max-movement` | `30` | Maximum displacement from touch-down on either raw axis, in counts. |
 
 Geometry defaults describe a Cirque Pinnacle. Override them for other
