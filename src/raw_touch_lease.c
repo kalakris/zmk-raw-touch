@@ -148,7 +148,7 @@ static void lease_expiry_cb(struct k_work *work) {
 
 int zmk_raw_touch_lease_handle_command(struct zmk_endpoint_instance source, const uint8_t *body,
                                       size_t len) {
-    if (len != ZMK_RAW_TOUCH_LEASE_CMD_LEN) {
+    if (len != ZMK_RAW_TOUCH_CMD_LEN) {
         LOG_WRN("Rejected lease command with length %d", (int)len);
         return -EMSGSIZE;
     }

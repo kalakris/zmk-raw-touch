@@ -300,7 +300,7 @@ static int set_report_cb(const struct device *dev, struct usb_setup_packet *setu
     const uint8_t *body = *data;
     size_t body_len = *len;
 
-    if (body_len == ZMK_RAW_TOUCH_LEASE_CMD_LEN + 1 && body[0] == ZMK_RAW_TOUCH_REPORT_ID) {
+    if (body_len == ZMK_RAW_TOUCH_CMD_LEN + 1 && body[0] == ZMK_RAW_TOUCH_REPORT_ID) {
         body++;
         body_len--;
     }
