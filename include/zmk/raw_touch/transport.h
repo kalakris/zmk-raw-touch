@@ -42,6 +42,9 @@ int zmk_raw_touch_selected_endpoint(void);
  * failure. As on BLE, a full queue evicts the oldest MOTION frame and
  * never a release.
  *
+ * While the bus is suspended the frame is queued and a remote wakeup is
+ * requested; the queue drains once the host resumes the bus.
+ *
  * A bus reset or detach flushes the queue: those frames belong to a bus
  * that is gone, and the host's silence watchdog is what closes that
  * gesture. Defined in src/raw_touch_usb_hid.c.

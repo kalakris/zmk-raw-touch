@@ -233,6 +233,15 @@ static inline bool rt_txq_pop(struct rt_txq *q, struct rt_txq_entry *out) {
     return have;
 }
 
+static inline bool rt_txq_is_empty(struct rt_txq *q) {
+    k_spinlock_key_t key = k_spin_lock(&q->lock);
+    bool empty = q->count == 0;
+
+    k_spin_unlock(&q->lock, key);
+
+    return empty;
+}
+
 /* Discard everything. For the events that make every queued frame
  * meaningless at once: a USB bus reset or detach, an endpoint switch. */
 static inline void rt_txq_flush(struct rt_txq *q) {
