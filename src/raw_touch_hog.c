@@ -297,17 +297,27 @@ static void raw_touch_hog_drain(struct k_work *work) {
      * With no connection the queue simply waits - the next frame (or the
      * next retry) re-submits this handler; nothing can go stale out of
      * sight there, because the disconnect and endpoint-switch paths below
-     * discard the entries a vanished profile left behind. */
+     * discard the entries a vanished profile left behind.
+     *
+     * The profile is read before the lookup, and re-read before every
+     * frame: while it still reads the same, `conn` is that profile's
+     * connection. */
+    int active_profile = zmk_ble_active_profile_index();
     struct bt_conn *conn = zmk_ble_active_profile_conn();
     if (conn == NULL) {
         return;
     }
 
-    /* Sampled once, with the connection, so every frame in this drain is
-     * judged against the same profile. */
-    int active_profile = zmk_ble_active_profile_index();
-
     while (rt_txq_peek(&txq, &entry, &generation)) {
+        if (zmk_ble_active_profile_index() != active_profile) {
+            /* The profile switched since `conn` was looked up, which may
+             * have been before or after the switch. Start over with a
+             * fresh lookup rather than judge the frames queued for the new
+             * profile against the old one. */
+            k_work_schedule_for_queue(&raw_touch_hog_work_q, &raw_touch_hog_work, K_NO_WAIT);
+            break;
+        }
+
         if (entry.binding != active_profile) {
             /* Sampled for a different host: its lease_held bit and its
              * coordinates describe that host's gesture, so it must not be
