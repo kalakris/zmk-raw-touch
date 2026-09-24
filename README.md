@@ -467,9 +467,16 @@ listener chain decides what they do: MoErgo's stock Go60 keymap, for
 example, maps the left pad's taps to a right click with a
 `zmk,input-processor-code-mapper` from `INPUT_BTN_0` to `INPUT_BTN_1`;
 keep such a mapper before the idle filter. The property is per pad, so a
-pad that scrolls only on a layer keeps the default veto. Note that in
-RawTouch mode a short touch that stops momentum can then count as a tap
-if it lifts within `tap-max-ms` and moves less than `tap-max-movement`.
+pad that scrolls only on a layer keeps the default veto.
+
+In Standard mode such a tap is emitted at lift-off like any other. In
+RawTouch mode the firmware cannot tell it from a short touch that only
+stopped the host's momentum, so it parks the tap for 250 ms and emits it
+when the host confirms it; RawTouch confirms every scroll-context tap
+that did not catch a coast, with no setting involved. The pad advertises
+this in its feature-report slot, and the confirmed tap still goes
+through the listener chain, so the keymap decides what it does in both
+modes (see [Tap confirm](#tap-confirm) in the appendix).
 
 ### 4. Build and flash
 
@@ -933,7 +940,7 @@ Each `zmk,raw-touch-pad` node describes one input device. See the
 | `rotate-90` | absent | Swap axes when deriving pointer motion; advertise the mounting to the host. |
 | `x-invert` / `y-invert` | absent | Invert the corresponding pointer axis after the swap; advertise the flags to the host. |
 | `tap-click` | absent | Enable firmware tap-to-click. |
-| `tap-click-while-scrolling` | absent | Also report taps for scroll-context touches (dedicated scrolling pads). Requires `tap-click`. |
+| `tap-click-while-scrolling` | absent | Also report taps for scroll-context touches (dedicated scrolling pads); parked for host confirmation in RawTouch mode. Requires `tap-click`. |
 | `tap-max-ms` | `180` | Maximum touch duration counted as a tap. |
 | `tap-max-movement` | `30` | Maximum displacement from touch-down on either raw axis, in counts. |
 
@@ -986,7 +993,9 @@ driver emits absolute events and release samples.
 **Tap-to-click does nothing.** Enable `tap-click`, check release samples,
 and make sure the listener does not consume the injected `INPUT_BTN_0`.
 Taps are deliberately suppressed for touches that entered scroll context
-unless the pad sets `tap-click-while-scrolling`.
+unless the pad sets `tap-click-while-scrolling`; with it, a tap in
+RawTouch mode needs the host's confirmation, which RawTouch sends for
+taps that did not catch a coast.
 
 **A pad is dead even in Standard mode, while keys work.** Check the
 driver, GPIOs, and split relay before the host app. Try power-cycling the
@@ -1121,7 +1130,7 @@ hard-code the two-pad length.
 |---|---|---|
 | 0 | 1 | `protocol_version`, 4 |
 | 1 | 1 | `pads_present`, bit `p` set for pad ID `p` |
-| 2 | 1 | `capabilities`, bit 0 = host lease supported; other bits reserved |
+| 2 | 1 | `capabilities`, bit 0 = host lease supported, bit 1 = tap confirm supported; other bits reserved |
 | 3 | 1 | `module_version` of the half answering, packed major.minor; 0 = unknown |
 | 4 | 4 | `magic`, the ASCII bytes `R` `A` `W` `T` (`52 41 57 54`) |
 | 8 | 8 | `device_id`, the SoC's hardware identifier; all-zero = unknown |
@@ -1165,7 +1174,7 @@ Each slot contains:
 | Slot offset | Bytes | Field |
 |---|---|---|
 | +0 | 1 | `resolution`, counts/mm; 0 = unknown |
-| +1 | 1 | `orientation`: bit 0 swaps X/Y (`rotate-90`), bit 1 inverts X, bit 2 inverts Y |
+| +1 | 1 | `orientation`: bit 0 swaps X/Y (`rotate-90`), bit 1 inverts X, bit 2 inverts Y; bit 3 = the pad parks scroll-context taps for host confirmation |
 | +2 | 2 | `x_max`, unsigned little-endian |
 | +4 | 2 | `y_max`, unsigned little-endian |
 | +6 | 1 | `max_contacts`, currently 1 |
@@ -1227,6 +1236,31 @@ Hosts must re-acquire leases after resume, reconnect, and device
 re-enumeration. They should acquire a lease only when ready to generate
 scroll events. RawTouch leaves the lease released when disabled or when
 Accessibility permission is unavailable.
+
+### Tap confirm
+
+Check `capabilities` bit 1 before writing. A pad whose slot has byte +1
+bit 3 set (`tap-click` with `tap-click-while-scrolling`) does not emit a
+scroll-context tap by itself while a lease is held: at lift-off of a
+touch that qualified as a tap by the firmware's own thresholds, it parks
+the tap for 250 ms. The host confirms it with this **4-byte command
+body**, framed exactly like the lease command:
+
+| Offset | Bytes | Field |
+|---|---|---|
+| 0 | 1 | Command `0x02` |
+| 1 | 1 | `pad_id` of the touch being confirmed |
+| 2 | 2 | Reserved, must be zero |
+
+The firmware honors the command only from the endpoint that holds the
+lease and ignores it, without error, when nothing is parked or the
+window has passed, so a host may confirm liberally. The host should
+confirm exactly the scroll-context touches that were not catching a
+coasting momentum tail; the firmware's own `tap-max-ms` and
+`tap-max-movement` still apply, so a confirmation can never produce a
+tap the keymap would not have. The emitted tap enters the pad's listener
+chain like any other, so what it does is the keymap's decision. In
+Standard mode, and for pads without bit 3, taps are never parked.
 
 ### Delivery and lost releases
 

@@ -48,7 +48,10 @@
  * counts (Chebyshev distance) from its touch-down point - and never had a
  * scroll-mode frame, unless tap-click-while-scrolling is set - injects an
  * INPUT_BTN_0 press + release into the pad's normal input pipeline, so
- * existing button processors apply.
+ * existing button processors apply. A scroll-context tap that a leasing
+ * host watched is parked instead of emitted, until the host confirms it
+ * (zmk/raw_touch/tap.h): the host is the only party that knows whether
+ * the touch merely caught a coasting momentum tail.
  */
 
 #define DT_DRV_COMPAT zmk_raw_touch_pad
@@ -70,6 +73,7 @@ LOG_MODULE_DECLARE(zmk_raw_touch, CONFIG_ZMK_RAW_TOUCH_LOG_LEVEL);
 #include <zmk/raw_touch/hid.h>
 #include <zmk/raw_touch/scroll.h>
 #include <zmk/raw_touch/split_stamp.h>
+#include <zmk/raw_touch/tap.h>
 #include <zmk/raw_touch/transport.h>
 
 struct raw_touch_pad_config {
@@ -140,6 +144,14 @@ struct raw_touch_pad_data {
     uint16_t touch_down_x, touch_down_y;
     bool tap_candidate;
     bool tap_scroll_seen;
+    /* A leasing host saw this touch in scroll context, so a tap from it
+     * is the host's to confirm (see zmk/raw_touch/tap.h). */
+    bool tap_scroll_leased;
+    /* Uptime until which a parked tap accepts a confirmation; 0 = none.
+     * Written on the input thread, read and cleared from the transport's
+     * thread by zmk_raw_touch_tap_confirm(); a torn 64-bit read can at
+     * worst misjudge one window edge by a tick, which is harmless. */
+    int64_t pending_tap_until;
 
     /* This pad's slot in the feature report, assigned by raw_touch_init(),
      * or -1 for a pad that got none (more pads than slots). Only a relayed
@@ -250,6 +262,9 @@ static void raw_touch_process_frame(const struct raw_touch_pad_config *cfg,
         data->touch_down_y = data->cur_y;
         data->tap_candidate = cfg->tap_click;
         data->tap_scroll_seen = false;
+        data->tap_scroll_leased = false;
+        /* A new touch supersedes a parked tap the host never confirmed. */
+        data->pending_tap_until = 0;
     }
 
     /* Scroll context vetoes the tap unless the pad opts out of the veto:
@@ -258,6 +273,7 @@ static void raw_touch_process_frame(const struct raw_touch_pad_config *cfg,
      * pad may want its taps (e.g. mapped to a right click downstream). */
     data->tap_scroll_seen =
         data->tap_scroll_seen || (scroll_mode && !cfg->tap_click_while_scrolling);
+    data->tap_scroll_leased = data->tap_scroll_leased || (scroll_mode && lease_held);
 
     if (touched && data->tap_candidate) {
         int travel_x = (int)data->cur_x - (int)data->touch_down_x;
@@ -306,7 +322,13 @@ static void raw_touch_process_frame(const struct raw_touch_pad_config *cfg,
 
     if (!touched && data->tap_candidate && !data->tap_scroll_seen &&
         (k_uptime_get() - data->touch_down_ts) <= cfg->tap_max_ms) {
-        raw_touch_emit_tap(cfg);
+        if (data->tap_scroll_leased) {
+            /* The host watched this scroll-context touch and may know it
+             * was a catch, not a tap: park it and let the host decide. */
+            data->pending_tap_until = k_uptime_get() + ZMK_RAW_TOUCH_TAP_CONFIRM_WINDOW_MS;
+        } else {
+            raw_touch_emit_tap(cfg);
+        }
     }
 
     if (touched) {
@@ -411,7 +433,10 @@ static void raw_touch_input_event(const struct raw_touch_pad_config *cfg,
 #define RT_ORIENTATION(cfg)                                                                        \
     (((cfg)->rotate_90 ? ZMK_RAW_TOUCH_ORIENT_ROTATE_90 : 0) |                                     \
      ((cfg)->x_invert ? ZMK_RAW_TOUCH_ORIENT_X_INVERT : 0) |                                       \
-     ((cfg)->y_invert ? ZMK_RAW_TOUCH_ORIENT_Y_INVERT : 0))
+     ((cfg)->y_invert ? ZMK_RAW_TOUCH_ORIENT_Y_INVERT : 0) |                                       \
+     ((cfg)->tap_click && (cfg)->tap_click_while_scrolling                                         \
+          ? ZMK_RAW_TOUCH_PAD_PARKS_SCROLL_TAPS                                                    \
+          : 0))
 
 #define RT_INST(n)                                                                                 \
     BUILD_ASSERT(DT_INST_PROP(n, pad_id) < 8, "raw touch pad-id must be less than 8");             \
@@ -450,6 +475,32 @@ static const struct raw_touch_pad_config *const raw_touch_pads[] = {
  * needs it, to hand each pad the feature slot it was given. */
 static struct raw_touch_pad_data *const raw_touch_pad_datas[] = {
     DT_INST_FOREACH_STATUS_OKAY(RT_DATA_REF)};
+
+int zmk_raw_touch_tap_confirm(uint8_t pad_id) {
+    for (size_t i = 0; i < ARRAY_SIZE(raw_touch_pads); i++) {
+        const struct raw_touch_pad_config *cfg = raw_touch_pads[i];
+        struct raw_touch_pad_data *data = raw_touch_pad_datas[i];
+
+        if (cfg->pad_id != pad_id) {
+            continue;
+        }
+
+        int64_t until = data->pending_tap_until;
+
+        if (until != 0 && k_uptime_get() <= until) {
+            data->pending_tap_until = 0;
+            LOG_DBG("Raw touch pad %d tap confirmed by the host", pad_id);
+            raw_touch_emit_tap(cfg);
+        } else {
+            LOG_DBG("Raw touch pad %d tap confirm with nothing parked", pad_id);
+        }
+
+        return 0;
+    }
+
+    LOG_WRN("Tap confirm for unknown raw touch pad %d", pad_id);
+    return -EINVAL;
+}
 
 static int raw_touch_init(void) {
     uint8_t pads_present = 0;
