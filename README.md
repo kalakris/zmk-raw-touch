@@ -898,7 +898,7 @@ Each `zmk,raw-touch-pad` node describes one input device. See the
 | Property | Default | Meaning |
 |---|---|---|
 | `device` | required | Physical absolute-input device, or a split relay on the central. |
-| `pad-id` | `0` | Unique ID from 0 to 7. Give every pad a different ID. |
+| `pad-id` | required | Unique ID from 0 to 7. Give every pad a different ID. |
 | `x-max` / `y-max` | `2047` / `1535` | Maximum raw coordinates; set these for your sensor. |
 | `resolution` | `38` | Sensor counts/mm; `0` means unknown. |
 | `rotate-90` | absent | Swap axes when deriving pointer motion; advertise the mounting to the host. |
