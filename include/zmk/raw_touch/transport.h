@@ -19,6 +19,16 @@
  */
 int zmk_raw_touch_send_report(void);
 
+/**
+ * @brief Identify the endpoint zmk_raw_touch_send_report() sends to now.
+ *
+ * ZMK's zmk_endpoint_instance_to_index() of zmk_endpoints_selected(), so
+ * equal values mean the same host (transport and BLE profile). -1 on a
+ * build with no host-facing transport, which never sends. Defined in
+ * src/raw_touch_endpoints.c.
+ */
+int zmk_raw_touch_selected_endpoint(void);
+
 #if IS_ENABLED(CONFIG_ZMK_RAW_TOUCH_USB)
 /**
  * @brief Queue the current frame for the raw touch USB HID interface.

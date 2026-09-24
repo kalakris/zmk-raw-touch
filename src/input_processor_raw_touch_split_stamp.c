@@ -57,9 +57,10 @@ static void rtss_report(uint8_t reg, uint16_t code, int32_t value) {
                      .sync = 0,
                  }}};
 
-    /* Not fatal for either message: the central stamps the frame with its
-     * own clock when no stamp arrives, and keeps the version it already
-     * had (the transport already warns when its queue is full). */
+    /* Not fatal for either message: the central dates a frame whose stamp
+     * is missing from its own clock plus the last stamp's offset, and
+     * keeps the version it already had (the transport already warns when
+     * its queue is full). */
     int ret = zmk_split_peripheral_report_event(&ev);
     if (ret < 0) {
         LOG_DBG("Split message 0x%04x not sent: %d", (unsigned int)code, ret);
