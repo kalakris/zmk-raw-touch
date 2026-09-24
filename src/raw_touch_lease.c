@@ -305,4 +305,7 @@ static int lease_init(void) {
     return 0;
 }
 
-SYS_INIT(lease_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+/* POST_KERNEL, ahead of every APPLICATION-level init: ZMK brings up USB and
+ * BLE there, so no transport can deliver a command before the expiry work
+ * items exist. */
+SYS_INIT(lease_init, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
