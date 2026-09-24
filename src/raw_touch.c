@@ -343,7 +343,7 @@ static void raw_touch_process_frame(const struct raw_touch_pad_config *cfg,
          * watchdog covers them. */
         zmk_raw_touch_hid_set(cfg->pad_id, data->cur_x, data->cur_y, data->cur_z, flags,
                               data->seq++, raw_touch_frame_timestamp(data, have_stamp, stamp));
-        zmk_raw_touch_send_report();
+        zmk_raw_touch_send_report(&zmk_raw_touch_hid_get_report()->body);
         data->stream_touched = touched;
         data->stream_endpoint = zmk_raw_touch_selected_endpoint();
     } else if (data->stream_touched) {
@@ -363,7 +363,7 @@ static void raw_touch_process_frame(const struct raw_touch_pad_config *cfg,
             zmk_raw_touch_hid_set(cfg->pad_id, 0, 0, 0,
                                   scroll_mode ? ZMK_RAW_TOUCH_FLAGS_SCROLL_MODE : 0, data->seq++,
                                   raw_touch_frame_timestamp(data, have_stamp, stamp));
-            zmk_raw_touch_send_report();
+            zmk_raw_touch_send_report(&zmk_raw_touch_hid_get_report()->body);
         }
         data->stream_touched = false;
     }

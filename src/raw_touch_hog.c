@@ -412,7 +412,7 @@ BT_CONN_CB_DEFINE(zmk_raw_touch_hog_conn_callbacks) = {
     .disconnected = raw_touch_hog_disconnected,
 };
 
-int zmk_raw_touch_hog_send_report(struct zmk_raw_touch_report_body *body) {
+int zmk_raw_touch_hog_send_report(const struct zmk_raw_touch_report_body *body) {
     if (touch_input_attr_idx == 0) {
         return -ENODEV;
     }
@@ -423,7 +423,7 @@ int zmk_raw_touch_hog_send_report(struct zmk_raw_touch_report_body *body) {
 
     /* Never blocks: this runs inline on the input dispatch path, where
      * waiting would head-of-line block pointer deltas and taps. */
-    enum rt_txq_put_result res = rt_txq_put(&txq, body, (int16_t)profile);
+    int err = rt_txq_enqueue(&txq, body, (int16_t)profile, "BLE");
 
     /* K_NO_WAIT via k_work_schedule (not reschedule): if a release-frame
      * retry is already armed, leave its delay alone - the queue cannot be
@@ -432,21 +432,7 @@ int zmk_raw_touch_hog_send_report(struct zmk_raw_touch_report_body *body) {
      * still gets a wakeup. */
     k_work_schedule_for_queue(&raw_touch_hog_work_q, &raw_touch_hog_work, K_NO_WAIT);
 
-    switch (res) {
-    case RT_TXQ_PUT_EVICTED:
-        LOG_DBG("Raw touch BLE queue full; evicted the oldest motion frame");
-        break;
-    case RT_TXQ_PUT_FULL:
-        LOG_WRN("Raw touch BLE queue (%d) full of undelivered release frames; dropped an "
-                "incoming %s frame for pad %u. Raise CONFIG_ZMK_RAW_TOUCH_BLE_QUEUE_SIZE.",
-                CONFIG_ZMK_RAW_TOUCH_BLE_QUEUE_SIZE, rt_txq_is_release(body) ? "release" : "motion",
-                body->pad_id);
-        return -ENOBUFS;
-    case RT_TXQ_PUT_OK:
-        break;
-    }
-
-    return 0;
+    return err;
 }
 
 static int raw_touch_hog_init(void) {

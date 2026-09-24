@@ -61,14 +61,18 @@
  * the input dispatch thread while the drains run on the module's BLE work
  * queue and in USB callback context, and a spinlock (which locks
  * interrupts) is the only cheap primitive valid in all three.
+ *
+ * Includers declare the module's log module before including this.
  */
 
 #pragma once
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
 #include <zmk/raw_touch/hid.h>
@@ -179,6 +183,29 @@ rt_txq_put(struct rt_txq *q, const struct zmk_raw_touch_report_body *body, int16
     k_spin_unlock(&q->lock, key);
 
     return res;
+}
+
+/* rt_txq_put() for a transport's send path, logging what the put cost.
+ * `transport` names the queue in the log, and its size symbol as
+ * CONFIG_ZMK_RAW_TOUCH_<transport>_QUEUE_SIZE. Returns 0 if the frame was
+ * queued, or -ENOBUFS if it was dropped. */
+static inline int rt_txq_enqueue(struct rt_txq *q, const struct zmk_raw_touch_report_body *body,
+                                 int16_t binding, const char *transport) {
+    enum rt_txq_put_result res = rt_txq_put(q, body, binding);
+
+    if (res == RT_TXQ_PUT_FULL) {
+        LOG_WRN("Raw touch %s queue (%d) full of undelivered release frames; dropped an "
+                "incoming %s frame for pad %u. Raise CONFIG_ZMK_RAW_TOUCH_%s_QUEUE_SIZE.",
+                transport, q->size, rt_txq_is_release(body) ? "release" : "motion", body->pad_id,
+                transport);
+        return -ENOBUFS;
+    }
+
+    if (res == RT_TXQ_PUT_EVICTED) {
+        LOG_DBG("Raw touch %s queue full; evicted the oldest motion frame", transport);
+    }
+
+    return 0;
 }
 
 /* Copy the head out without consuming it, along with the generation to
