@@ -76,6 +76,14 @@ LOG_MODULE_DECLARE(zmk_raw_touch, CONFIG_ZMK_RAW_TOUCH_LOG_LEVEL);
 #include <zmk/raw_touch/tap.h>
 #include <zmk/raw_touch/transport.h>
 
+/* The input thread's queue is what makes re-injection work: the deltas and
+ * taps reported from inside a pad's input callback are dispatched after
+ * the event being handled, not nested inside it, and a tap confirmed from
+ * a transport's thread reaches the listener on the input thread like any
+ * other event. */
+BUILD_ASSERT(IS_ENABLED(CONFIG_INPUT_MODE_THREAD),
+             "zmk,raw-touch-pad requires CONFIG_INPUT_MODE_THREAD");
+
 struct raw_touch_pad_config {
     /* The input device producing the absolute touch events, and the
      * device the derived relative deltas and taps are injected back on. */
