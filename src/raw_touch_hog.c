@@ -389,12 +389,15 @@ static int raw_touch_hog_endpoint_listener(const zmk_event_t *eh) {
 ZMK_LISTENER(zmk_raw_touch_hog, raw_touch_hog_endpoint_listener);
 ZMK_SUBSCRIPTION(zmk_raw_touch_hog, zmk_endpoint_changed);
 
-/* Our own connection callback rather than zmk_ble_active_profile_changed,
- * for the same reason raw_touch_lease.c uses one: that event fires only for
- * the ACTIVE profile, while a queued frame can be bound to any profile.
- * zmk_ble_profile_index() maps the peer to its profile, returning a
- * negative value for non-host connections such as a split peripheral's -
- * which no frame is ever bound to, so nothing is discarded for those. */
+/* A host's connection is gone: its lease lapses, and the frames queued
+ * for it can no longer be delivered.
+ *
+ * Our own connection callback rather than zmk_ble_active_profile_changed:
+ * that event fires only for the ACTIVE profile, while a lease and a queued
+ * frame can belong to any connected profile. zmk_ble_profile_index() maps
+ * the peer to its profile, returning a negative value for non-host
+ * connections such as a split peripheral's, which hold no lease and no
+ * frames. */
 static void raw_touch_hog_disconnected(struct bt_conn *conn, uint8_t reason) {
     ARG_UNUSED(reason);
 
@@ -404,6 +407,12 @@ static void raw_touch_hog_disconnected(struct bt_conn *conn, uint8_t reason) {
         return;
     }
 
+    struct zmk_endpoint_instance endpoint = {
+        .transport = ZMK_TRANSPORT_BLE,
+        .ble = {.profile_index = profile},
+    };
+
+    zmk_raw_touch_lease_clear(endpoint, "BLE profile disconnected");
     rt_txq_discard_binding(&txq, (int16_t)profile);
     release_attempts = 0;
 }
