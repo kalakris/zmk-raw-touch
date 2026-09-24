@@ -347,7 +347,10 @@ static void raw_touch_hog_drain(struct k_work *work) {
             continue;
         }
 
-        if (rt_txq_is_release(&entry.body) && release_attempts + 1 < RT_TXQ_RELEASE_ATTEMPTS) {
+        /* -EINVAL is a host that has not subscribed to the report
+         * (CONFIG_BT_GATT_ENFORCE_SUBSCRIPTION), which no retry changes. */
+        if (rt_txq_is_release(&entry.body) && err != -EINVAL &&
+            release_attempts + 1 < RT_TXQ_RELEASE_ATTEMPTS) {
             /* Leave it at the head and come back: no TX buffer now does
              * not mean none next connection event. Deliberately
              * head-of-line - sending the frames behind it first would
@@ -359,10 +362,10 @@ static void raw_touch_hog_drain(struct k_work *work) {
         }
 
         if (rt_txq_is_release(&entry.body)) {
-            /* The link, not the buffer pool: nothing to do but let the
+            /* Not a passing buffer shortage: nothing to do but let the
              * host's silence watchdog close the gesture. */
             LOG_WRN("Dropped raw touch release frame for pad %u after %d notify failures (%d)",
-                    entry.body.pad_id, RT_TXQ_RELEASE_ATTEMPTS, err);
+                    entry.body.pad_id, release_attempts + 1, err);
         } else {
             LOG_DBG("Error notifying %d", err);
         }
