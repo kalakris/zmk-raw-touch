@@ -65,12 +65,12 @@ static K_SEM_DEFINE(hid_sem, 1, 1);
 /* ---------------------------------------------------------------------
  * Transmit queue
  *
- * The interrupt IN endpoint carries one transfer at a time, and a frame
- * produced while the previous transfer is still in flight used to be
- * dropped on the spot. That is acceptable for motion frames and is not
- * acceptable for a RELEASE frame (ZMK_RAW_TOUCH_FLAGS_TOUCHED clear:
- * lift-off, or the synthetic frame from a mid-touch lease lapse), which the
- * producer never re-sends: losing one leaves the host holding a phantom
+ * The interrupt IN endpoint carries one transfer at a time, so a frame
+ * produced while the previous transfer is still in flight has to wait.
+ * Dropping it instead would be acceptable for a motion frame and is not
+ * for a RELEASE frame (ZMK_RAW_TOUCH_FLAGS_TOUCHED clear: lift-off, or
+ * the synthetic frame from a mid-touch lease lapse), which the producer
+ * never re-sends: losing one leaves the host holding a phantom
  * finger-down until its own ~150 ms silence watchdog fires, which costs
  * the gesture its lift-off momentum and can join a quick re-touch onto
  * it. It does not take a broken link to hit - two pads share this
@@ -86,9 +86,9 @@ static K_SEM_DEFINE(hid_sem, 1, 1);
  * polls the endpoint, and a release cannot be lost while the bus is
  * healthy.
  *
- * The pacing assumption the BUILD_ASSERT above rests on is unchanged:
- * still one transfer, of one packet, in flight at a time. The queue only
- * decides what the NEXT transfer carries; it never arms a second one.
+ * The pacing assumption the BUILD_ASSERT above rests on holds: one
+ * transfer, of one packet, in flight at a time. The queue only decides
+ * what the NEXT transfer carries; it never arms a second one.
  *
  * Entries carry RT_TXQ_NO_BINDING. Unlike a BLE profile, USB has one bus
  * and one host, and the events that invalidate queued frames (bus reset,
@@ -270,19 +270,21 @@ static int get_report_cb(const struct device *dev, struct usb_setup_packet *setu
     return 0;
 }
 
-/* SET_REPORT(FEATURE) carries the protocol's single host-to-device path:
- * the host lease (see src/raw_touch_lease.c). Everything else is still
- * rejected with -ENOTSUP, exactly as Zephyr's default handler would.
+/* SET_REPORT(FEATURE) carries the protocol's host-to-device commands: the
+ * host lease and tap confirm (see src/raw_touch_lease.c). Everything else
+ * is still rejected with -ENOTSUP, exactly as Zephyr's default handler
+ * would.
  *
  * Per HID 1.11 a control-pipe report on a device using report IDs is
  * ID-prefixed, matching what get_report_cb returns; but host stacks are
  * not uniform about the prefix on Set_Report, so a bare 4-byte body is
- * accepted too. The two forms cannot collide: the command byte 0x01 is
- * fixed and distinct from the report ID 0x04.
+ * accepted too. The two forms cannot collide: the command bytes (0x01,
+ * 0x02) are distinct from the report ID 0x04.
  *
  * CONFIG_ENABLE_HID_INT_OUT_EP stays untouched -- it is a global symbol
  * that would add an interrupt OUT endpoint to ZMK's keyboard interface as
- * well, and the control pipe is plenty for a ~0.03 Hz lease renewal. */
+ * well, and the control pipe is plenty for a lease renewal every few
+ * seconds and a confirm per tap. */
 static int set_report_cb(const struct device *dev, struct usb_setup_packet *setup, int32_t *len,
                          uint8_t **data) {
     if ((setup->wValue & HID_GET_REPORT_TYPE_MASK) != HID_REPORT_TYPE_FEATURE) {
