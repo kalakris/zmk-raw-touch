@@ -91,6 +91,7 @@ int zmk_raw_touch_usb_send_report(const struct zmk_raw_touch_report_body *body);
  *
  * @retval 0 if the frame was queued.
  * @retval -ENODEV if the input report characteristic was not found.
+ * @retval -ENOTCONN if the active profile's host is not connected.
  * @retval -ENOBUFS if the queue was full of undelivered release frames
  *         (a mis-sized CONFIG_ZMK_RAW_TOUCH_BLE_QUEUE_SIZE).
  */

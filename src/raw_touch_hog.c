@@ -414,6 +414,14 @@ int zmk_raw_touch_hog_send_report(const struct zmk_raw_touch_report_body *body) 
      * frame was sampled for. */
     int profile = zmk_ble_active_profile_index();
 
+    /* A frame for a host that is not connected could only reach it after
+     * it reconnects, stale - the trailing release that a disconnect in
+     * mid-touch produces, typically. The disconnect path discards what was
+     * queued before it; this keeps anything from queueing after it. */
+    if (!zmk_ble_profile_is_connected((uint8_t)profile)) {
+        return -ENOTCONN;
+    }
+
     /* Never blocks: this runs inline on the input dispatch path, where
      * waiting would head-of-line block pointer deltas and taps. */
     int err = rt_txq_enqueue(&txq, body, (int16_t)profile, "BLE");
