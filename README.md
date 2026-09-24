@@ -68,7 +68,7 @@ Tested dependency versions:
 | Component | Tested revision |
 |---|---|
 | `moergo-sc/zmk` | `57a7b8e06b19898e59a4dbd5f554b7ed5677493b` |
-| `kalakris/cirque-input-module`, `intree-driver` branch | `cbb4eaada3b3be052939a16c0441081a72d7d6b9` |
+| `kalakris/cirque-input-module`, `intree-driver` branch | `89a08962f1c0bde4b499badd68cb068b8a369000` |
 
 That driver module packages Zephyr's Pinnacle driver for the older tree,
 with three patches for status handling, edge sensitivity, and calibration
@@ -123,8 +123,11 @@ compatible absolute-mode driver, and `CONFIG_ZMK_POINTING=y`.
 
 ### 1. Add the module to your manifest
 
-Merge these entries into the existing `remotes` and `projects` lists in
-`config/west.yml`; keep your board's ZMK project and other dependencies:
+Choose a numbered tag from the module's
+[releases](https://github.com/kalakris/zmk-raw-touch/releases) and replace
+`<module-release-tag>` below with it. Merge these entries into the existing
+`remotes` and `projects` lists in `config/west.yml`; keep your board's ZMK
+project and other dependencies:
 
 ```yaml
 manifest:
@@ -134,16 +137,22 @@ manifest:
   projects:
     - name: zmk-raw-touch
       remote: kalakris
-      revision: main
+      revision: <module-release-tag>
 ```
 
-Pin `revision` to a commit once you have a working build. On the tested
-Zephyr 3.5 configuration, also add or override the driver project:
+Pin dependencies to numbered release tags so updates are deliberate and
+builds remain reproducible. Use these tags instead of development branches
+such as `main` or individual commit hashes. The optional `latest` tag
+moves to each new stable release; it does not pin a fixed version.
+
+On the tested Zephyr 3.5 configuration, also add or override the driver
+project. Replace `<driver-release-tag>` with the driver tag listed in the
+chosen module release's notes:
 
 ```yaml
     - name: cirque-input-module
       remote: kalakris
-      revision: cbb4eaada3b3be052939a16c0441081a72d7d6b9
+      revision: <driver-release-tag>
 ```
 
 ### 2. Start from a trackpad configuration
