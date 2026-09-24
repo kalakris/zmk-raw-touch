@@ -40,8 +40,8 @@
  * head.
  *
  * The generation counter closes the same window against the flush paths,
- * which run from other threads entirely (an endpoint switch, a disconnect,
- * a USB bus reset). Every operation that replaces what sits at the head
+ * which run from other threads entirely (a BLE disconnect, a USB bus reset
+ * or detach). Every operation that replaces what sits at the head
  * without going through rt_txq_drop_head() bumps it; rt_txq_peek() hands
  * the caller the current value and rt_txq_drop_head() refuses to drop if
  * it no longer matches. The transport then simply re-peeks: the frame it
@@ -272,7 +272,7 @@ static inline bool rt_txq_is_empty(struct rt_txq *q) {
 }
 
 /* Discard everything. For the events that make every queued frame
- * meaningless at once: a USB bus reset or detach, an endpoint switch. */
+ * meaningless at once: a USB bus reset or detach. */
 static inline void rt_txq_flush(struct rt_txq *q) {
     k_spinlock_key_t key = k_spin_lock(&q->lock);
 

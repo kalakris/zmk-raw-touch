@@ -35,8 +35,6 @@ LOG_MODULE_DECLARE(zmk_raw_touch, CONFIG_ZMK_RAW_TOUCH_LOG_LEVEL);
 #include <zmk/ble.h>
 
 #include <zmk/endpoints_types.h>
-#include <zmk/event_manager.h>
-#include <zmk/events/endpoint_changed.h>
 
 #include <zmk/raw_touch/lease.h>
 #include <zmk/raw_touch/hid.h>
@@ -233,7 +231,7 @@ static struct k_work_q raw_touch_hog_work_q;
  *
  * Frames wait here for a connection event. The ring itself - the
  * never-evict-a-release policy, the FIFO ordering, the generation counter
- * that protects a peeked head against a concurrent flush - lives in
+ * that protects a peeked head against a concurrent discard - lives in
  * raw_touch_txq.h and is shared with the USB transport, so the eviction
  * policy is written once. What is BLE-specific is here:
  *
@@ -253,10 +251,11 @@ static struct k_work_q raw_touch_hog_work_q;
  *     delayed retry, most damagingly - is delivered to host B after a
  *     profile switch, carrying A's lease_held bit and a position from
  *     A's gesture, which is exactly the endpoint scoping the protocol
- *     promises. Entries are additionally discarded up front on the two
- *     events that invalidate them wholesale: an endpoint switch (the
- *     whole queue) and the disconnect of a bound profile (that profile's
- *     entries).
+ *     promises. Switching ZMK's output between USB and BLE discards
+ *     nothing, as on USB: a frame bound to the active profile still
+ *     belongs to that host. The disconnect of a bound profile discards
+ *     that profile's entries up front, so none of them reaches its host
+ *     when it reconnects.
  * ------------------------------------------------------------------ */
 
 /* Bounded retry for a release frame stuck behind a transient notify
@@ -274,14 +273,16 @@ static K_WORK_DELAYABLE_DEFINE(raw_touch_hog_work, raw_touch_hog_drain);
 
 /* Notify attempts already spent on the release frame currently at the
  * head. Only ever touched from the drain handler, which a work queue can
- * never run concurrently with itself, plus the flush paths, which zero it
- * (a single-byte store; a flush racing the drain can only make it retry
- * an extra time or two, never fewer). */
+ * never run concurrently with itself, plus the disconnect path, which
+ * zeroes it (a single-byte store; racing the drain it can only make it
+ * retry an extra time or two, never fewer). */
 static uint8_t release_attempts;
 
-/* Everything queued belongs to an endpoint we are no longer sending to. */
-static void raw_touch_hog_flush(void) {
-    rt_txq_flush(&txq);
+/* Done with the head, sent or not. A refused drop means the disconnect
+ * path discarded it meanwhile; either way the next head starts with no
+ * attempts spent, and the drain re-peeks. */
+static void raw_touch_hog_drop_head(uint32_t generation) {
+    rt_txq_drop_head(&txq, generation);
     release_attempts = 0;
 }
 
@@ -296,40 +297,37 @@ static void raw_touch_hog_drain(struct k_work *work) {
      * zmk_ble_active_profile_conn() hands back is released at the end.
      * With no connection the queue simply waits - the next frame (or the
      * next retry) re-submits this handler; nothing can go stale out of
-     * sight there, because the disconnect and endpoint-switch paths below
-     * discard the entries a vanished profile left behind.
+     * sight there, because the disconnect path below discards the entries
+     * a vanished profile left behind.
      *
-     * The profile is read before the lookup, and re-read before every
-     * frame: while it still reads the same, `conn` is that profile's
-     * connection. */
-    int active_profile = zmk_ble_active_profile_index();
+     * The profile is read before the lookup: while the active profile
+     * still reads the same, `conn` is its connection. */
+    int conn_profile = zmk_ble_active_profile_index();
     struct bt_conn *conn = zmk_ble_active_profile_conn();
     if (conn == NULL) {
         return;
     }
 
     while (rt_txq_peek(&txq, &entry, &generation)) {
-        if (zmk_ble_active_profile_index() != active_profile) {
-            /* The profile switched since `conn` was looked up, which may
-             * have been before or after the switch. Start over with a
-             * fresh lookup rather than judge the frames queued for the new
-             * profile against the old one. */
-            k_work_schedule_for_queue(&raw_touch_hog_work_q, &raw_touch_hog_work, K_NO_WAIT);
-            break;
-        }
+        int active_profile = zmk_ble_active_profile_index();
 
+        /* The delivery rule: a frame goes out while the profile it was
+         * sampled for is the active BLE profile, whatever ZMK's output is
+         * now, and is discarded once another profile is active. Its
+         * lease_held bit and its coordinates describe its own host's
+         * gesture, which that host's silence watchdog closes. */
         if (entry.binding != active_profile) {
-            /* Sampled for a different host: its lease_held bit and its
-             * coordinates describe that host's gesture, so it must not be
-             * delivered here. The host it was meant for closes the
-             * gesture with its own silence watchdog. */
             LOG_DBG("Discarding raw touch frame queued for BLE profile %d (profile %d is active)",
                     entry.binding, active_profile);
-
-            if (rt_txq_drop_head(&txq, generation)) {
-                release_attempts = 0;
-            }
+            raw_touch_hog_drop_head(generation);
             continue;
+        }
+
+        if (active_profile != conn_profile) {
+            /* The profile switched since `conn` was looked up: start over
+             * with the new profile's connection. */
+            k_work_schedule_for_queue(&raw_touch_hog_work_q, &raw_touch_hog_work, K_NO_WAIT);
+            break;
         }
 
         struct bt_gatt_notify_params notify_params = {
@@ -345,12 +343,7 @@ static void raw_touch_hog_drain(struct k_work *work) {
         }
 
         if (err == 0) {
-            /* A refused drop means a flush replaced the head while this
-             * frame was being notified; the loop re-peeks and whatever is
-             * at the head now has not been sent. */
-            if (rt_txq_drop_head(&txq, generation)) {
-                release_attempts = 0;
-            }
+            raw_touch_hog_drop_head(generation);
             continue;
         }
 
@@ -374,30 +367,11 @@ static void raw_touch_hog_drain(struct k_work *work) {
             LOG_DBG("Error notifying %d", err);
         }
 
-        if (rt_txq_drop_head(&txq, generation)) {
-            release_attempts = 0;
-        }
+        raw_touch_hog_drop_head(generation);
     }
 
     bt_conn_unref(conn);
 }
-
-/* An endpoint switch retargets every subsequent frame, so nothing still
- * queued for the endpoint we were sending to may go out. (The leases of
- * the endpoints switched away from are cleared at the same moment, so
- * the frames' lease_held bits are stale too.) */
-static int raw_touch_hog_endpoint_listener(const zmk_event_t *eh) {
-    const struct zmk_endpoint_changed *epc = as_zmk_endpoint_changed(eh);
-
-    if (epc != NULL) {
-        raw_touch_hog_flush();
-    }
-
-    return ZMK_EV_EVENT_BUBBLE;
-}
-
-ZMK_LISTENER(zmk_raw_touch_hog, raw_touch_hog_endpoint_listener);
-ZMK_SUBSCRIPTION(zmk_raw_touch_hog, zmk_endpoint_changed);
 
 /* A host's connection is gone: its lease lapses, and the frames queued
  * for it can no longer be delivered.
