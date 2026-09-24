@@ -118,8 +118,15 @@ samples, breaking normal lift-off and firmware tap detection.
 
 ## Setup
 
-You need an existing ZMK configuration that builds for your board, a
-compatible absolute-mode driver, and `CONFIG_ZMK_POINTING=y`.
+**Go60 users:** the
+[Go60 RawTouch configuration](https://github.com/kalakris/go60-rawtouch-config)
+provides a stock keymap with RawTouch already configured. Fork it and
+build with GitHub Actions, or use its adoption guide to add the changes
+to an existing Go60 configuration.
+
+For manual integration, you need an existing ZMK configuration that
+builds for your board, a compatible absolute-mode driver, and
+`CONFIG_ZMK_POINTING=y`.
 
 ### 1. Add the module to your manifest
 
@@ -472,11 +479,14 @@ pad that scrolls only on a layer keeps the default veto.
 In Standard mode such a tap is emitted at lift-off like any other. In
 RawTouch mode the firmware cannot tell it from a short touch that only
 stopped the host's momentum, so it parks the tap for 250 ms and emits it
-when the host confirms it; RawTouch confirms every scroll-context tap
-that did not catch a coast, with no setting involved. The pad advertises
-this in its feature-report slot, and the confirmed tap still goes
-through the listener chain, so the keymap decides what it does in both
-modes (see [Tap confirm](#tap-confirm) in the appendix).
+when the host confirms it. RawTouch confirms taps that did not stop
+momentum and stayed within its own limits: 300 ms and 60 counts of
+movement from touch-down on either raw axis. The firmware's thresholds
+still apply. Increasing `tap-max-ms` or `tap-max-movement` beyond these
+host limits can allow taps in Standard mode that RawTouch mode rejects.
+These host limits are fixed, with no app setting. Confirmed taps go
+through the listener chain in both modes; see
+[Tap confirm](#tap-confirm) for the protocol details.
 
 ### 4. Build and flash
 
@@ -944,6 +954,10 @@ Each `zmk,raw-touch-pad` node describes one input device. See the
 | `tap-max-ms` | `180` | Maximum touch duration counted as a tap. |
 | `tap-max-movement` | `30` | Maximum displacement from touch-down on either raw axis, in counts. |
 
+For scroll-context taps in RawTouch mode, the app also imposes limits of
+300 ms and 60 counts. Raising the firmware thresholds above those values
+does not raise the host limits; see [Tap confirm](#tap-confirm).
+
 Geometry defaults describe a Cirque Pinnacle. Override them for other
 hardware. Frames carry raw coordinates; orientation flags describe how
 to interpret them.
@@ -1261,6 +1275,13 @@ coasting momentum tail; the firmware's own `tap-max-ms` and
 tap the keymap would not have. The emitted tap enters the pad's listener
 chain like any other, so what it does is the keymap's decision. In
 Standard mode, and for pads without bit 3, taps are never parked.
+
+The RawTouch app additionally requires the touch to stay in scroll
+context throughout, last no more than 300 ms, and move no more than
+60 counts from touch-down on either raw axis. These are fixed host limits,
+not protocol limits. They exceed the firmware defaults of 180 ms and
+30 counts, but can reject taps allowed by larger firmware settings. A
+missing release or lapsed lease does not receive a confirmation.
 
 ### Delivery and lost releases
 
