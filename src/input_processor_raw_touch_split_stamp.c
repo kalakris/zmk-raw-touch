@@ -40,6 +40,8 @@ LOG_MODULE_DECLARE(zmk_raw_touch, CONFIG_ZMK_RAW_TOUCH_LOG_LEVEL);
  * (this processor only ever looks at the sync event). */
 #define RTSS_TOUCH_GAP_MS 500
 
+/* Per devicetree node, so one node serves one relay: two relays sharing a
+ * node would each see the other's frames as the ongoing touch. */
 struct rtss_data {
     /* Uptime of the last frame stamped, and whether there has been one. */
     int64_t last_frame_ms;

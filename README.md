@@ -638,7 +638,9 @@ on the wire to the host.
 The same processor also announces the peripheral's module version before
 its first frame after boot, and again after any pause of at least 500 ms,
 so a host can show which build each half runs. Until an announcement
-arrives, that pad's version reads as unknown.
+arrives, that pad's version reads as unknown. Each stamp node tracks
+those pauses for one relay, so a peripheral with two relayed pads needs
+two stamp nodes.
 
 ### Central: process the relayed touch samples
 
