@@ -46,8 +46,9 @@
  * Tap-to-click: when the pad node sets tap-click, a touch that lifts off
  * within tap-max-ms and never strays more than tap-max-movement raw
  * counts (Chebyshev distance) from its touch-down point - and never had a
- * scroll-mode frame - injects an INPUT_BTN_0 press + release into the
- * pad's normal input pipeline, so existing button processors apply.
+ * scroll-mode frame, unless tap-click-while-scrolling is set - injects an
+ * INPUT_BTN_0 press + release into the pad's normal input pipeline, so
+ * existing button processors apply.
  */
 
 #define DT_DRV_COMPAT zmk_raw_touch_pad
@@ -91,6 +92,7 @@ struct raw_touch_pad_config {
     bool y_invert;
 
     bool tap_click;
+    bool tap_click_while_scrolling;
     uint16_t tap_max_ms;
     uint16_t tap_max_movement;
 
@@ -250,7 +252,12 @@ static void raw_touch_process_frame(const struct raw_touch_pad_config *cfg,
         data->tap_scroll_seen = false;
     }
 
-    data->tap_scroll_seen = data->tap_scroll_seen || scroll_mode;
+    /* Scroll context vetoes the tap unless the pad opts out of the veto:
+     * a flick on a scroll layer, or a touch that stops momentum in
+     * RawTouch mode, must not click by default, but a dedicated scrolling
+     * pad may want its taps (e.g. mapped to a right click downstream). */
+    data->tap_scroll_seen =
+        data->tap_scroll_seen || (scroll_mode && !cfg->tap_click_while_scrolling);
 
     if (touched && data->tap_candidate) {
         int travel_x = (int)data->cur_x - (int)data->touch_down_x;
@@ -421,6 +428,7 @@ static void raw_touch_input_event(const struct raw_touch_pad_config *cfg,
         .x_invert = DT_INST_PROP(n, x_invert),                                                     \
         .y_invert = DT_INST_PROP(n, y_invert),                                                     \
         .tap_click = DT_INST_PROP(n, tap_click),                                                   \
+        .tap_click_while_scrolling = DT_INST_PROP(n, tap_click_while_scrolling),                \
         .tap_max_ms = DT_INST_PROP(n, tap_max_ms),                                                 \
         .tap_max_movement = DT_INST_PROP(n, tap_max_movement),                                     \
         .relayed = DT_NODE_HAS_COMPAT(DT_INST_PHANDLE(n, device), zmk_input_split),                \

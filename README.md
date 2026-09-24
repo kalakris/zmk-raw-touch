@@ -404,8 +404,10 @@ taps.
 With `tap-click`, the module supplies that detector: a touch must lift
 within `tap-max-ms` without exceeding `tap-max-movement`. The module also
 knows whether the touch was used for scrolling and suppresses clicks for
-those touches. This keeps tap behavior consistent in Standard and RawTouch
-modes, including when the host app is not running.
+those touches unless the pad sets `tap-click-while-scrolling` (see
+[Dedicated scrolling pad](#dedicated-scrolling-pad)). This keeps tap
+behavior consistent in Standard and RawTouch modes, including when the
+host app is not running.
 
 The module emits `INPUT_BTN_0` directly, so the old `tap_to_click` mapper
 is no longer needed. Remove processors that discard that button, such as
@@ -455,8 +457,19 @@ an overlay that replaces the base chain can change its behavior.
 This works independently per pad: one can always scroll while another
 points or uses a scroll layer. The overlay also removes `tap-click` from
 the dedicated pad's node: firmware suppresses taps for scroll-context
-touches, so the property would have no effect. Keyboard mouse-button
+touches, so the property alone would have no effect. Keyboard mouse-button
 bindings can still provide clicks.
+
+To keep taps on a dedicated scrolling pad, set `tap-click` together with
+`tap-click-while-scrolling` on the pad node instead of removing it. The
+module then reports taps for scroll-context touches too, and the
+listener chain decides what they do: MoErgo's stock Go60 keymap, for
+example, maps the left pad's taps to a right click with a
+`zmk,input-processor-code-mapper` from `INPUT_BTN_0` to `INPUT_BTN_1`;
+keep such a mapper before the idle filter. The property is per pad, so a
+pad that scrolls only on a layer keeps the default veto. Note that in
+RawTouch mode a short touch that stops momentum can then count as a tap
+if it lifts within `tap-max-ms` and moves less than `tap-max-movement`.
 
 ### 4. Build and flash
 
@@ -920,6 +933,7 @@ Each `zmk,raw-touch-pad` node describes one input device. See the
 | `rotate-90` | absent | Swap axes when deriving pointer motion; advertise the mounting to the host. |
 | `x-invert` / `y-invert` | absent | Invert the corresponding pointer axis after the swap; advertise the flags to the host. |
 | `tap-click` | absent | Enable firmware tap-to-click. |
+| `tap-click-while-scrolling` | absent | Also report taps for scroll-context touches (dedicated scrolling pads). Requires `tap-click`. |
 | `tap-max-ms` | `180` | Maximum touch duration counted as a tap. |
 | `tap-max-movement` | `30` | Maximum displacement from touch-down on either raw axis, in counts. |
 
@@ -971,7 +985,8 @@ driver emits absolute events and release samples.
 
 **Tap-to-click does nothing.** Enable `tap-click`, check release samples,
 and make sure the listener does not consume the injected `INPUT_BTN_0`.
-Taps are deliberately suppressed for touches that entered scroll context.
+Taps are deliberately suppressed for touches that entered scroll context
+unless the pad sets `tap-click-while-scrolling`.
 
 **A pad is dead even in Standard mode, while keys work.** Check the
 driver, GPIOs, and split relay before the host app. Try power-cycling the
