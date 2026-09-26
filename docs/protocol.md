@@ -183,12 +183,20 @@ feature-characteristic write:
 | 3 | 1 | Reserved, must be zero |
 
 For example, `01 01 1e 00` requests 30 seconds and `01 00 00 00`
-releases. USB accepts a body with or without its leading report ID;
-BLE writes carry only the body. Invalid USB requests are stalled. BLE
-rejects a wrong length with `Invalid Attribute Value Length`, invalid
-fields with `Value Not Allowed`, nonzero offsets with `Invalid Offset`,
-and writes from a peer outside the bonded host profiles with
-`Write Not Permitted`.
+releases.
+
+Send the four bytes alone, or zero-padded to the feature report's body
+length (`16 + 8 × N`): Windows' `HidD_SetFeature`, and hidapi on
+Windows, always write the declared length. Every padding byte must be
+zero. Over USB, a leading report ID is accepted where the host API
+includes it. BLE writes carry no report ID, and the command must arrive
+in a single write: the firmware refuses long writes, so a padded body
+has to fit the link's ATT MTU.
+
+Invalid USB requests are stalled. BLE rejects a short body or nonzero
+padding with `Invalid Attribute Value Length`, invalid fields with
+`Value Not Allowed`, nonzero offsets with `Invalid Offset`, and writes
+from a peer outside the bonded host profiles with `Write Not Permitted`.
 
 A lease belongs to the USB endpoint or the specific BLE profile that
 wrote it. It suppresses wheel motion only while that endpoint is
