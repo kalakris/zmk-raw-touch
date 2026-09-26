@@ -276,7 +276,7 @@ pad and listener rather than adding a second active listener.
 -        input-processors = <&tap_to_click>,
 -                           <&zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)>,
 -                           <&zip_xy_scaler 1 1>;
-+        input-processors = <&zip_xy_scaler 1 1>,
++        input-processors = <&zip_xy_scaler 1 3>,
 +                           <&zip_raw_touch_idle_filter>;
  
          scroll {
@@ -345,7 +345,7 @@ The changes have five jobs:
     trackpad_listener: trackpad_listener {
         compatible = "zmk,input-listener";
         device = <&trackpad>;
-        input-processors = <&zip_xy_scaler 1 1>,
+        input-processors = <&zip_xy_scaler 1 3>,
                            <&zip_raw_touch_idle_filter>;
 
         scroll {
@@ -737,7 +737,7 @@ The button mapper and orientation work as in the local-pad example.
 -    input-processors = <&remote_tap_to_click>,
 -                       <&zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)>,
 -                       <&zip_xy_scaler 1 1>;
-+    input-processors = <&zip_xy_scaler 1 1>,
++    input-processors = <&zip_xy_scaler 1 3>,
 +                       <&zip_raw_touch_idle_filter_remote>;
  
      scroll {
@@ -831,7 +831,7 @@ scroll marker with the local listener, but not that listener's idle filter.
 &remote_trackpad_listener {
     status = "okay";
     device = <&trackpad_split>;
-    input-processors = <&zip_xy_scaler 1 1>,
+    input-processors = <&zip_xy_scaler 1 3>,
                        <&zip_raw_touch_idle_filter_remote>;
 
     scroll {
