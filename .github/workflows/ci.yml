@@ -1,4 +1,4 @@
-# Three checks on every push and pull request, plus one on release tags:
+# Three checks on every push and pull request, plus two on release tags:
 #
 #   format           ZMK's pre-commit hooks (.pre-commit-config.yaml):
 #                    clang-format with ZMK's .clang-format, prettier on
@@ -24,6 +24,13 @@
 #                    has to agree with include/zmk/raw_touch/version.h.
 #                    Runs only on tag pushes; the patch level is the tag's
 #                    alone, since version.h does not carry one.
+#
+#   release          A v* tag that passes everything above becomes a GitHub
+#                    release, with docs/release-notes/<tag>.md as its notes
+#                    (the job fails if that file is missing). RawTouch looks
+#                    up the newest release, not the newest tag, to tell
+#                    users about firmware updates. A tag with a pre-release
+#                    suffix (v0.2.0-rc.1) is published as a pre-release.
 #
 # The firmware job reuses ZMK's own user-config workflow, which passes this
 # checkout as an extra module. Anyone can reproduce it locally: see
@@ -89,3 +96,27 @@ jobs:
               ;;
           esac
           echo "Tag $GITHUB_REF_NAME matches $header ($major.$minor)"
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [format, readme-examples, firmware, version-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          notes="docs/release-notes/$GITHUB_REF_NAME.md"
+          if [ ! -f "$notes" ]; then
+            echo "::error::Write $notes before tagging $GITHUB_REF_NAME"
+            exit 1
+          fi
+          prerelease=
+          case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" $prerelease \
+            --title "zmk-raw-touch $GITHUB_REF_NAME" --notes-file "$notes" --verify-tag

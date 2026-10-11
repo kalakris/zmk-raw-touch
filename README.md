@@ -1,5 +1,9 @@
 # zmk-raw-touch
 
+[![CI](https://github.com/kalakris/zmk-raw-touch/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kalakris/zmk-raw-touch/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kalakris/zmk-raw-touch)](https://github.com/kalakris/zmk-raw-touch/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/kalakris/zmk-raw-touch)](LICENSE)
+
 <img src="https://raw.githubusercontent.com/kalakris/rawtouch/main/docs/images/demo.gif" align="right" width="180" alt="A finger on a Go60's built-in trackpad scrolls a web page through RawTouch: the page follows the finger, coasts after a flick, and stops when the finger touches down again">
 
 > **Early release.** Interfaces may still change; issues and PRs welcome.
