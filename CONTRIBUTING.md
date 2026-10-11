@@ -56,6 +56,11 @@ looks like dead frame parsing while keys keep working.
 
 ## Style
 
+C is formatted with ZMK's `.clang-format`, and the other checks are
+ZMK's pre-commit hooks; CI runs them all. Install them once with
+`pip install pre-commit && pre-commit install` and they run on every
+commit, or run `pre-commit run --all-files` by hand.
+
 Match the surrounding code. Keep processors and transports independent
 of any particular trackpad driver: the module consumes standard absolute
 input events and nothing in it should know about the Pinnacle.

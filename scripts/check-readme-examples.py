@@ -60,7 +60,9 @@ def expected_lines(is_diff: bool, args: str) -> tuple[list[str], set[str]]:
         read_example(before), read_example(after),
         fromfile=f"{name} (before)", tofile=f"{name} (with raw touch)", lineterm="",
     )
-    return list(diff), {before, after}
+    # A blank context line is a lone space; strip it so the README carries
+    # no trailing whitespace.
+    return [line.rstrip() for line in diff], {before, after}
 
 
 def main() -> int:

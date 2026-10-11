@@ -79,7 +79,7 @@
 
 /* Binding for a transport with nothing to bind to: USB has a single bus
  * and a single host. Never equal to a BLE profile index, which is >= 0. */
-#define RT_TXQ_NO_BINDING ((int16_t)-1)
+#define RT_TXQ_NO_BINDING ((int16_t)(-1))
 
 struct rt_txq_entry {
     struct zmk_raw_touch_report_body body;

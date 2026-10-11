@@ -78,7 +78,7 @@
  * @retval -EINVAL on a bad operation, timeout or reserved byte.
  */
 int zmk_raw_touch_lease_handle_command(struct zmk_endpoint_instance source, const uint8_t *body,
-                                      size_t len);
+                                       size_t len);
 
 /**
  * @brief Whether a lease is held for the currently-selected endpoint.
@@ -105,7 +105,7 @@ void zmk_raw_touch_lease_clear(struct zmk_endpoint_instance endpoint, const char
 #else /* no host-facing transport: split peripheral, or both disabled */
 
 static inline int zmk_raw_touch_lease_handle_command(struct zmk_endpoint_instance source,
-                                                    const uint8_t *body, size_t len) {
+                                                     const uint8_t *body, size_t len) {
     ARG_UNUSED(source);
     ARG_UNUSED(body);
     ARG_UNUSED(len);

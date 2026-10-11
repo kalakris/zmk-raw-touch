@@ -54,8 +54,7 @@ BUILD_ASSERT(sizeof(struct zmk_raw_touch_feature_pad_slot) == 8,
 /* The feature body is a 16-byte header plus one 8-byte slot per pad, so
  * its length is 16 + 8 * N (32 on a two-pad build). Hosts derive N from
  * the report length; nothing here may pad the struct. */
-BUILD_ASSERT(sizeof(struct zmk_raw_touch_feature_body) ==
-                 16 + 8 * ZMK_RAW_TOUCH_FEATURE_PAD_SLOTS,
+BUILD_ASSERT(sizeof(struct zmk_raw_touch_feature_body) == 16 + 8 * ZMK_RAW_TOUCH_FEATURE_PAD_SLOTS,
              "Raw touch feature report body must stay 16 + 8 * pads bytes; "
              "the host parses it by offset");
 /* The header's fixed offsets, which hosts parse by. protocol_version is
@@ -173,7 +172,13 @@ static struct zmk_raw_touch_report touch_report = {
     .report_id = ZMK_RAW_TOUCH_REPORT_ID,
     /* contact_id stays 0 for the life of the report: the module only
      * streams single-touch pads. */
-    .body = {.pad_id = 0, .contact_id = 0, .x = 0, .y = 0, .z = 0, .flags = 0, .seq = 0,
+    .body = {.pad_id = 0,
+             .contact_id = 0,
+             .x = 0,
+             .y = 0,
+             .z = 0,
+             .flags = 0,
+             .seq = 0,
              .timestamp = 0},
 };
 
@@ -201,10 +206,10 @@ static struct zmk_raw_touch_feature_report touch_feature_report = {
               * writes; without one the capability must not be advertised.
               * (Moot in practice: with no transport there is no host to
               * read this report either.) */
-             .capabilities = (IS_ENABLED(CONFIG_ZMK_RAW_TOUCH_USB) ||
-                              IS_ENABLED(CONFIG_ZMK_RAW_TOUCH_BLE))
-                                 ? (ZMK_RAW_TOUCH_CAP_HOST_LEASE | ZMK_RAW_TOUCH_CAP_TAP_CONFIRM)
-                                 : 0},
+             .capabilities =
+                 (IS_ENABLED(CONFIG_ZMK_RAW_TOUCH_USB) || IS_ENABLED(CONFIG_ZMK_RAW_TOUCH_BLE))
+                     ? (ZMK_RAW_TOUCH_CAP_HOST_LEASE | ZMK_RAW_TOUCH_CAP_TAP_CONFIRM)
+                     : 0},
 };
 
 void zmk_raw_touch_hid_set_feature_header(uint8_t pads_present) {
@@ -215,8 +220,7 @@ void zmk_raw_touch_hid_set_feature_device_id(const uint8_t *device_id, size_t le
     /* Zero first, so a hwinfo id shorter than the field is zero-padded on
      * the right and a failed read leaves the all-zero "unknown". A longer
      * id keeps its leading bytes; byte order is hwinfo's, untouched. */
-    memset(touch_feature_report.body.device_id, 0,
-           sizeof(touch_feature_report.body.device_id));
+    memset(touch_feature_report.body.device_id, 0, sizeof(touch_feature_report.body.device_id));
 
     if (device_id == NULL || len == 0) {
         return;

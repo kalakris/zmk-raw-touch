@@ -101,7 +101,7 @@ struct zmk_raw_touch_report {
 #define ZMK_RAW_TOUCH_MAGIC_2 'W'
 #define ZMK_RAW_TOUCH_MAGIC_3 'T'
 #define ZMK_RAW_TOUCH_MAGIC_INIT                                                                   \
-    { ZMK_RAW_TOUCH_MAGIC_0, ZMK_RAW_TOUCH_MAGIC_1, ZMK_RAW_TOUCH_MAGIC_2, ZMK_RAW_TOUCH_MAGIC_3 }
+    {ZMK_RAW_TOUCH_MAGIC_0, ZMK_RAW_TOUCH_MAGIC_1, ZMK_RAW_TOUCH_MAGIC_2, ZMK_RAW_TOUCH_MAGIC_3}
 
 /* Device id: the SoC's own hardware identifier, from Zephyr's
  * hwinfo_get_device_id() (the FICR DEVICEID pair on an nRF52), byte order

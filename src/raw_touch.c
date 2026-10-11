@@ -551,9 +551,8 @@ static void raw_touch_input_event(const struct raw_touch_pad_config *cfg,
     (((cfg)->rotate_90 ? ZMK_RAW_TOUCH_ORIENT_ROTATE_90 : 0) |                                     \
      ((cfg)->x_invert ? ZMK_RAW_TOUCH_ORIENT_X_INVERT : 0) |                                       \
      ((cfg)->y_invert ? ZMK_RAW_TOUCH_ORIENT_Y_INVERT : 0) |                                       \
-     ((cfg)->tap_click && (cfg)->tap_click_while_scrolling                                         \
-          ? ZMK_RAW_TOUCH_PAD_PARKS_SCROLL_TAPS                                                    \
-          : 0))
+     ((cfg)->tap_click && (cfg)->tap_click_while_scrolling ? ZMK_RAW_TOUCH_PAD_PARKS_SCROLL_TAPS   \
+                                                           : 0))
 
 #define RT_INST(n)                                                                                 \
     BUILD_ASSERT(DT_INST_PROP(n, pad_id) < 8, "raw touch pad-id must be less than 8");             \
@@ -580,7 +579,7 @@ static void raw_touch_input_event(const struct raw_touch_pad_config *cfg,
         .x_invert = DT_INST_PROP(n, x_invert),                                                     \
         .y_invert = DT_INST_PROP(n, y_invert),                                                     \
         .tap_click = DT_INST_PROP(n, tap_click),                                                   \
-        .tap_click_while_scrolling = DT_INST_PROP(n, tap_click_while_scrolling),                \
+        .tap_click_while_scrolling = DT_INST_PROP(n, tap_click_while_scrolling),                   \
         .tap_max_ms = DT_INST_PROP(n, tap_max_ms),                                                 \
         .tap_max_movement = DT_INST_PROP(n, tap_max_movement),                                     \
         .relayed = DT_NODE_HAS_COMPAT(DT_INST_PHANDLE(n, device), zmk_input_split),                \
@@ -647,8 +646,9 @@ static int raw_touch_init(void) {
         uint8_t bit = BIT(raw_touch_pads[i]->pad_id);
 
         if (pads_present & bit) {
-            LOG_ERR("Duplicate raw touch pad-id %d; frames from both pads will be indistinguishable",
-                    raw_touch_pads[i]->pad_id);
+            LOG_ERR(
+                "Duplicate raw touch pad-id %d; frames from both pads will be indistinguishable",
+                raw_touch_pads[i]->pad_id);
         }
         pads_present |= bit;
     }

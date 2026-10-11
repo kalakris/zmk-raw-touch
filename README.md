@@ -329,9 +329,9 @@ lines starting with `+` are added.
 +#include <raw_touch/processors.dtsi>
  #include <zephyr/dt-bindings/input/input-event-codes.h>
  #include <dt-bindings/zmk/input_transform.h>
- 
+
  #define SCROLL_LAYER 2
- 
+
  &trackpad {
 -    data-mode = "relative";
 -    primary-tap-enable;
@@ -339,7 +339,7 @@ lines starting with `+` are added.
 +    idle-packets-count = <3>;
 +    /delete-property/ primary-tap-enable;
  };
- 
+
  / {
 -    input_processors {
 -        tap_to_click: tap_to_click {
@@ -356,7 +356,7 @@ lines starting with `+` are added.
 +        y-invert;
 +        tap-click;
      };
- 
+
      trackpad_listener: trackpad_listener {
          compatible = "zmk,input-listener";
          device = <&trackpad>;
@@ -365,7 +365,7 @@ lines starting with `+` are added.
 -                           <&zip_xy_scaler 1 1>;
 +        input-processors = <&zip_xy_scaler 1 3>,
 +                           <&zip_raw_touch_idle_filter>;
- 
+
          scroll {
              layers = <SCROLL_LAYER>;
 -            input-processors = <&tap_to_click>,
@@ -743,13 +743,13 @@ split:**
 +        };
 +    };
  };
- 
+
  &trackpad_split {
      device = <&remote_trackpad>;
 +    /* The cell is the relay's own reg (trackpad_split@0 -> 0). */
 +    input-processors = <&zip_raw_touch_split_stamp 0>;
  };
- 
+
  &remote_trackpad_listener {
 ```
 
@@ -808,10 +808,10 @@ wheel reports:**
 +#include <raw_touch/processors.dtsi>
  #include <zephyr/dt-bindings/input/input-event-codes.h>
  #include <dt-bindings/zmk/input_transform.h>
- 
+
 @@ -9,12 +10,19 @@
  };
- 
+
  / {
 +    raw_touch_remote: raw_touch_remote {
 +        compatible = "zmk,raw-touch-pad";
@@ -842,7 +842,7 @@ wheel reports:**
 -                       <&zip_xy_scaler 1 1>;
 +    input-processors = <&zip_xy_scaler 1 3>,
 +                       <&zip_raw_touch_idle_filter_remote>;
- 
+
      scroll {
          layers = <SCROLL_LAYER>;
 -        input-processors = <&remote_tap_to_click>,

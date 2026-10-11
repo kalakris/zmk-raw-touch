@@ -127,8 +127,7 @@ static void lease_expiry_cb(struct k_work *work) {
          * i.e. this very handler -- as pending, so it is always true from
          * inside the callback and the lease would never expire. Test the
          * re-arm flags alone. */
-        if (!(k_work_delayable_busy_get(dwork) & (K_WORK_DELAYED | K_WORK_QUEUED)) &&
-            lease->held) {
+        if (!(k_work_delayable_busy_get(dwork) & (K_WORK_DELAYED | K_WORK_QUEUED)) && lease->held) {
             lease->held = false;
             cleared = true;
         }
@@ -160,7 +159,7 @@ static bool command_length_valid(const uint8_t *body, size_t len) {
 }
 
 int zmk_raw_touch_lease_handle_command(struct zmk_endpoint_instance source, const uint8_t *body,
-                                      size_t len) {
+                                       size_t len) {
     if (!command_length_valid(body, len)) {
         LOG_WRN("Rejected host command with length %d or nonzero padding", (int)len);
         return -EMSGSIZE;

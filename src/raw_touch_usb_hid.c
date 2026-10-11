@@ -266,8 +266,7 @@ static int get_report_cb(const struct device *dev, struct usb_setup_packet *setu
     default:
         /* 7.2.1 of the HID v1.11 spec is unclear about requests for reports
          * that do not exist; return -ENOTSUP like the Zephyr subsys does. */
-        LOG_DBG("Unsupported report type 0x%x requested",
-                setup->wValue & HID_GET_REPORT_TYPE_MASK);
+        LOG_DBG("Unsupported report type 0x%x requested", setup->wValue & HID_GET_REPORT_TYPE_MASK);
         return -ENOTSUP;
     }
 

@@ -1,0 +1,34 @@
+# ZMK's own hooks and versions (zmkfirmware/zmk .pre-commit-config.yaml),
+# so code moves between this module and ZMK without reformatting. Run them
+# locally with `pip install pre-commit && pre-commit install`; CI runs them
+# on every push.
+#
+# Two departures from ZMK: prettier formats YAML only, because on Markdown
+# it rewrites the README's generated example blocks (see
+# scripts/check-readme-examples.py); and there is no gitlint, since this
+# repository does not use Conventional Commits.
+fail_fast: false
+repos:
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.1
+    hooks:
+      - id: remove-tabs
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        types_or: [c++, c]
+        args:
+          - -i
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: 787fb9f542b140ba0b2aced38e6a3e68021647a3
+    hooks:
+      - id: prettier
+        types: [yaml]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-shebang-scripts-are-executable
