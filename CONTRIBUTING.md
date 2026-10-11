@@ -49,7 +49,10 @@ looks like dead frame parsing while keys keep working.
   change needs a Bluetooth forget and re-pair. Coordinate with the
   RawTouch host before merging.
 - **The module version lives in `include/zmk/raw_touch/version.h`.**
-  Tags are `v0.y.z`; CI checks a tag against the header.
+  Tags are `v0.y.z`; CI checks a tag against the header, then publishes
+  the GitHub release from `docs/release-notes/<tag>.md`, so write that
+  file before tagging. RawTouch only sees the firmware's major.minor, so
+  a fix users must flash bumps the minor version.
 - Do not assume a pad count or a specific keyboard. Slot counts come
   from the devicetree, and the feature report describes the pads.
 - New files carry the MIT SPDX header used throughout `src/`.
