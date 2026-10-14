@@ -6,18 +6,20 @@
 
 <img src="https://raw.githubusercontent.com/kalakris/rawtouch/main/docs/images/demo.gif" align="right" width="180" alt="A finger on a Go60's built-in trackpad scrolls a web page through RawTouch: the page follows the finger, coasts after a flick, and stops when the finger touches down again">
 
-> **Early release.** Interfaces may still change; issues and PRs welcome.
-
 A ZMK module that sends a keyboard trackpad's absolute position and contact
 state to a host application over USB or Bluetooth. The macOS companion,
 [RawTouch](https://github.com/kalakris/rawtouch), turns those reports into
-native macOS scroll gestures: vertical and horizontal scrolling, lift-off
-momentum, and touch-to-stop.
+native macOS scroll gestures: two-axis scrolling that follows the finger
+smoothly, lift-off momentum, and touch-to-stop. It feels like a trackpad,
+not a mouse wheel. Wheel events move in steps and carry no touch-down or
+lift-off, so no tuning of wheel emulation on the keyboard can make them
+scroll like this.
 
 The module also derives ordinary pointer movement and optional tap-to-click
-from the same input, and your wheel processors keep scrolling working when
-no host app is running. It adds its own HID interface and Bluetooth HID
-service without patching ZMK core.
+from the same input. When the host app is not running, the keyboard scrolls
+like it used to (Standard mode), through your keymap's wheel processors. It
+adds its own HID interface and Bluetooth HID service without patching ZMK
+core.
 
 [Compatibility](#compatibility) · [Setup](#setup) ·
 [Split keyboards](#split-keyboards) · [Configuration](#configuration-reference) ·
