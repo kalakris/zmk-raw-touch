@@ -1,0 +1,39 @@
+# Copyright (c) 2026 Mrinal Kalakrishnan
+# SPDX-License-Identifier: MIT
+
+# NOTE: every source here is compiled INTO ZMK's `app` target rather than
+# into a zephyr_library() of our own. That is deliberate and not optional:
+# ZMK declares its headers with `target_include_directories(app PRIVATE
+# include)`, so a separate Zephyr library cannot see <zmk/endpoints.h>,
+# <zmk/keymap.h> or <drivers/input_processor.h>. Compiling into `app` is
+# the same approach cirque-input-module uses for its ZMK-aware source.
+
+if(CONFIG_ZMK_RAW_TOUCH OR CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SCROLL OR CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_IDLE_FILTER OR CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SPLIT_STAMP)
+  target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+  # Sources are prefixed raw_touch_ so they never share a basename with ZMK
+  # core's own usb_hid.c / hog.c / hid.c / endpoints.c in the same target.
+
+  # Carries the LOG_MODULE_REGISTER, so it must be built whenever any part
+  # of the module is - the input processors are enabled independently of
+  # CONFIG_ZMK_RAW_TOUCH, by their own devicetree nodes.
+  target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/raw_touch_log.c)
+
+  target_sources_ifdef(CONFIG_ZMK_RAW_TOUCH app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/raw_touch_hid.c)
+  target_sources_ifdef(CONFIG_ZMK_RAW_TOUCH app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/raw_touch.c)
+  target_sources_ifdef(CONFIG_ZMK_RAW_TOUCH app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/raw_touch_endpoints.c)
+  # The host lease needs a host-facing transport: both its command surfaces
+  # (USB SET_REPORT, BLE feature-characteristic write) and its endpoint
+  # bookkeeping only exist on the central. On a peripheral the lease.h stubs
+  # keep the callers compiling with the lease permanently unheld.
+  target_sources_ifdef(CONFIG_ZMK_RAW_TOUCH_HOST_TRANSPORT app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/raw_touch_lease.c)
+
+  target_sources_ifdef(CONFIG_ZMK_RAW_TOUCH_USB app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/raw_touch_usb_hid.c)
+  target_sources_ifdef(CONFIG_ZMK_RAW_TOUCH_BLE app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/raw_touch_hog.c)
+  target_sources_ifdef(CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SCROLL app PRIVATE
+                       ${CMAKE_CURRENT_SOURCE_DIR}/src/input_processor_raw_touch_scroll.c)
+  target_sources_ifdef(CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_IDLE_FILTER app PRIVATE
+                       ${CMAKE_CURRENT_SOURCE_DIR}/src/input_processor_raw_touch_idle_filter.c)
+  target_sources_ifdef(CONFIG_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SPLIT_STAMP app PRIVATE
+                       ${CMAKE_CURRENT_SOURCE_DIR}/src/input_processor_raw_touch_split_stamp.c)
+endif()

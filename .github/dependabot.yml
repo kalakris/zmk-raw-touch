@@ -1,0 +1,16 @@
+# Monthly bumps for the actions the workflows pin by commit hash.
+#
+# ZMK's reusable build workflow is excluded: its tag names the ZMK release
+# the example firmware is built against, which moves together with
+# ci/west.yml and the README's compatibility table, not on its own.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: zmkfirmware/zmk
+    groups:
+      actions:
+        patterns: ["*"]

@@ -1,0 +1,41 @@
+---
+# Build matrix for the CI firmware job (.github/workflows/ci.yml), consumed
+# by ZMK's reusable build-user-config workflow with config_path: ci.
+#
+# The two Go60 halves compile the README's examples in the board's stock
+# roles: ci/go60_lh.keymap (the central) includes the local-pad,
+# dedicated-scroll and split-central examples, and ci/go60_rh.keymap (the
+# peripheral) the split-peripheral one. Those keymaps reach the files
+# under examples/ through the extra DTS include path below; the workflow
+# already passes the checkout itself as -DZMK_EXTRA_MODULES.
+#
+# To reproduce locally, from a west workspace whose manifest is ci/west.yml
+# (west init -l ci && west update):
+#
+#   west build -s zmk/app -b go60_lh -- \
+#       -DZMK_CONFIG=$PWD/ci \
+#       -DZMK_EXTRA_MODULES=$PWD \
+#       -DDTS_EXTRA_CPPFLAGS=-I$PWD
+#
+# The last four rows build the central with one host transport, then one
+# split transport, turned off, so the code each one's absence compiles in
+# is built too (the Go60 has both split transports: wired over the cable,
+# Bluetooth without it). Their artifact names keep their UF2s apart from
+# the full build's.
+include:
+  - board: go60_lh
+    cmake-args: -DDTS_EXTRA_CPPFLAGS=-I${GITHUB_WORKSPACE}
+  - board: go60_rh
+    cmake-args: -DDTS_EXTRA_CPPFLAGS=-I${GITHUB_WORKSPACE}
+  - board: go60_lh
+    cmake-args: -DDTS_EXTRA_CPPFLAGS=-I${GITHUB_WORKSPACE} -DCONFIG_ZMK_RAW_TOUCH_BLE=n
+    artifact-name: go60_lh-usb-only-zmk
+  - board: go60_lh
+    cmake-args: -DDTS_EXTRA_CPPFLAGS=-I${GITHUB_WORKSPACE} -DCONFIG_ZMK_RAW_TOUCH_USB=n
+    artifact-name: go60_lh-ble-only-zmk
+  - board: go60_lh
+    cmake-args: -DDTS_EXTRA_CPPFLAGS=-I${GITHUB_WORKSPACE} -DCONFIG_ZMK_SPLIT_BLE=n
+    artifact-name: go60_lh-wired-split-only-zmk
+  - board: go60_lh
+    cmake-args: -DDTS_EXTRA_CPPFLAGS=-I${GITHUB_WORKSPACE} -DCONFIG_ZMK_SPLIT_WIRED=n
+    artifact-name: go60_lh-wireless-split-only-zmk

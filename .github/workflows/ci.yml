@@ -1,0 +1,159 @@
+# Three checks on every push and pull request, plus two on release tags:
+#
+#   format           ZMK's pre-commit hooks (.pre-commit-config.yaml):
+#                    clang-format with ZMK's .clang-format, prettier on
+#                    YAML, and whitespace and YAML sanity checks.
+#
+#   readme-examples  The README's configuration blocks are copies of the
+#                    files under examples/ (and its diff blocks are
+#                    generated from them). scripts/check-readme-examples.py
+#                    fails if either has drifted; run it with --write to
+#                    refresh the README from the files.
+#
+#   firmware         The examples compile. ci/ is a ZMK config directory
+#                    that includes them for the MoErgo Go60, the one board
+#                    the module has been verified on, against the exact
+#                    ZMK tree and Cirque driver revisions the README's
+#                    compatibility table names. Both halves are built: the
+#                    central with both host transports, the scroll marker
+#                    and the idle filter; the peripheral with the split
+#                    stamp (it has no pad node, so no frame handler). Four
+#                    more central builds turn off one host or one split
+#                    transport each (ci/build.yaml). Not built: a central
+#                    with neither host transport, other boards, other pad
+#                    drivers. The
+#                    resulting UF2s are uploaded as the run's artifact.
+#
+#   version-tag      A v* tag names the version the firmware reports, so it
+#                    has to agree with include/zmk/raw_touch/version.h.
+#                    Runs only on tag pushes; the patch level is the tag's
+#                    alone, since version.h does not carry one.
+#
+#   release          A pushed v* tag that passes everything above becomes a
+#                    GitHub release, with docs/release-notes/<tag>.md as its
+#                    notes (the job fails if that file is missing). RawTouch
+#                    looks up the newest release, not the newest tag, to
+#                    tell users about firmware updates. A tag with a
+#                    pre-release suffix (v0.2.0-rc.1) is published as a
+#                    pre-release. A tag without one that is the highest
+#                    such version also moves the `stable` tag to its
+#                    commit, so `stable` always names the newest release; a
+#                    patch release on an older line leaves it alone. Only
+#                    a push runs these two jobs: a manual run on a tag ref
+#                    must not publish anything.
+#
+# The firmware job reuses ZMK's own user-config workflow, which passes this
+# checkout as an extra module. Anyone can reproduce it locally: see
+# ci/build.yaml for the west and cmake invocation.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    name: Formatting (pre-commit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: 3.x
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+
+  readme-examples:
+    name: README examples match examples/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: python3 scripts/check-readme-examples.py
+
+  firmware:
+    name: Example firmware
+    permissions:
+      contents: read
+    uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@v0.3
+    with:
+      config_path: ci
+      build_matrix_path: ci/build.yaml
+      archive_name: go60-example-firmware
+
+  version-tag:
+    name: Tag matches version.h
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare the tag with include/zmk/raw_touch/version.h
+        run: |
+          set -eu
+          header=include/zmk/raw_touch/version.h
+          major=$(awk '/^#define ZMK_RAW_TOUCH_MODULE_VERSION_MAJOR /{print $3}' "$header")
+          minor=$(awk '/^#define ZMK_RAW_TOUCH_MODULE_VERSION_MINOR /{print $3}' "$header")
+          tag=${GITHUB_REF_NAME#v}
+          # The tag may add a patch level (and a pre-release suffix); it may
+          # not disagree about major.minor, which is what the wire reports.
+          case "$tag" in
+            "$major.$minor" | "$major.$minor".*) ;;
+            *)
+              echo "::error file=$header::Tag $GITHUB_REF_NAME does not match $header ($major.$minor)"
+              exit 1
+              ;;
+          esac
+          echo "Tag $GITHUB_REF_NAME matches $header ($major.$minor)"
+
+  release:
+    name: GitHub release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [format, readme-examples, firmware, version-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every tag, so the stable step below can compare versions.
+          fetch-depth: 0
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          notes="docs/release-notes/$GITHUB_REF_NAME.md"
+          if [ ! -f "$notes" ]; then
+            echo "::error::Write $notes before tagging $GITHUB_REF_NAME"
+            exit 1
+          fi
+          prerelease=
+          case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" $prerelease \
+            --title "zmk-raw-touch $GITHUB_REF_NAME" --notes-file "$notes" --verify-tag
+
+      - name: Move the stable tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          newest=$(git tag --list 'v*' | grep -v -- - | sort -V | tail -n 1)
+          if [ "$newest" != "$GITHUB_REF_NAME" ]; then
+            echo "$GITHUB_REF_NAME is not the newest release ($newest); stable stays put"
+            exit 0
+          fi
+          # The commit the release tag names (GITHUB_SHA is that commit for
+          # a lightweight and an annotated tag alike). A tag pushed with the
+          # workflow's own token starts no workflow run, so this cannot
+          # trigger CI again.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/stable" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/stable" \
+              -f sha="$GITHUB_SHA" -F force=true > /dev/null
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref=refs/tags/stable -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          echo "stable -> $GITHUB_REF_NAME ($GITHUB_SHA)"

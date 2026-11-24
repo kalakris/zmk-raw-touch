@@ -1,0 +1,19 @@
+build/
+twister-out/
+.west/
+# West checkouts from a local `west init -l ci` land at the repo root.
+# Anchored: an unanchored zmk/ would also swallow include/zmk/.
+/zmk/
+# The zephyr checkout shares its directory with the module's own manifest,
+# so ignore its contents rather than the directory, and re-include the
+# manifest.
+/zephyr/*
+!/zephyr/module.yml
+/modules/
+/tools/
+/bootloader/
+compile_commands.json
+.DS_Store
+*.swp
+.vscode/
+.idea/

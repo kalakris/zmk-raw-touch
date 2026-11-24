@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Mrinal Kalakrishnan
+# SPDX-License-Identifier: MIT
+
+name: zmk-raw-touch
+build:
+  cmake: .
+  kconfig: Kconfig
+  settings:
+    dts_root: .

@@ -1,0 +1,19 @@
+/*
+ * Copyright (c) 2026 Mrinal Kalakrishnan
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * The peripheral half of the CI build - the right half, as on a stock
+ * Go60. It compiles the README's split-peripheral example
+ * (examples/split/peripheral.overlay, including the split stamp) on top of
+ * the shared keymap, with the example's generic labels mapped onto the
+ * Go60's board nodes by the #defines below.
+ */
+
+#include "go60.keymap"
+#include "go60_glue.dtsi"
+
+#define remote_trackpad glidepoint
+#define trackpad_split cirque_split
+#define remote_trackpad_listener cirque_rh_listener
+#include "examples/split/peripheral.overlay"

@@ -1,0 +1,49 @@
+# Copyright (c) 2026 Mrinal Kalakrishnan
+# SPDX-License-Identifier: MIT
+
+description: |
+  Stamps a relayed pad's frames with the peripheral's sample time.
+
+  For a pad on a split peripheral, the module's frame handler runs on the
+  central and would otherwise timestamp each frame when it gets there -
+  after the split hop, which on a polled wired link adds up to one poll
+  cycle of jitter to the timestamp hosts derive velocity from.
+
+  Chain this processor on the PERIPHERAL half's zmk,input-split relay
+  node (the one whose `device` is the pad). On the sync event of every
+  absolute frame it sends one extra input event through the relay ahead
+  of that sync, carrying the peripheral's clock; the central's frame
+  handler uses it in place of its own. Nothing is needed on the central,
+  and the wire protocol is unchanged - the timestamp just gets better.
+
+  Before its first frame after boot, and again before the next frame
+  after a gap of at least 500 ms, it also sends this half's module
+  version, which the central publishes in the relayed pad's feature-report
+  slot, so a host can see which build each half runs.
+
+  The one cell parameter is the relay's `reg` (the unit address of the
+  zmk,input-split node, e.g. 0 for `trackpad_split@0`): the central
+  routes relayed events to its matching relay node by that address, so
+  the stamp must carry the same one as the frames it belongs to. It is a
+  cell rather than a phandle property so the relay -> processor ->
+  relay reference does not form a devicetree dependency cycle.
+
+  Each devicetree node keeps one relay's touch-gap timer, which decides
+  when the version announcement is due. Chain one node on one relay:
+  declare a second node for a second relayed pad.
+
+  The processor is built only on a split peripheral; declare its node in
+  the peripheral's overlay:
+
+    zip_raw_touch_split_stamp: zip_raw_touch_split_stamp {
+        compatible = "zmk,input-processor-raw-touch-split-stamp";
+        #input-processor-cells = <1>;
+    };
+
+    &trackpad_split {
+        input-processors = <&zip_raw_touch_split_stamp 0>;
+    };
+
+compatible: "zmk,input-processor-raw-touch-split-stamp"
+
+include: ip_one_param.yaml

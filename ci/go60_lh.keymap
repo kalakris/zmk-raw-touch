@@ -1,0 +1,34 @@
+/*
+ * Copyright (c) 2026 Mrinal Kalakrishnan
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * The central half of the CI build - the left half, as on a stock Go60. It
+ * compiles three README examples on top of the shared keymap:
+ *
+ *   examples/trackpad/raw-touch.overlay        the local pad (pad-id 0)
+ *   examples/trackpad/dedicated-scroll.overlay ... as a dedicated scroll pad
+ *   examples/split/central.overlay             the relayed pad (pad-id 1)
+ *
+ * The examples are written against the README's generic labels. The
+ * #defines below map those onto the Go60's board nodes before each
+ * include, so the files compile unchanged. (Keymaps go through the C
+ * preprocessor, so a #define renames a label everywhere it is used.)
+ */
+
+#include "go60.keymap"
+#include "go60_glue.dtsi"
+
+/* The README's `trackpad` is the Go60's `glidepoint`, and the board
+ * already has a listener on it, which the example's listener is merged
+ * into so the pad does not get two. */
+#define trackpad glidepoint
+#define trackpad_listener cirque_lh_listener
+#include "examples/trackpad/raw-touch.overlay"
+#include "examples/trackpad/dedicated-scroll.overlay"
+
+/* The README's relay is the Go60's `cirque_split`, and the board's
+ * listener on it stands in for `remote_trackpad_listener`. */
+#define trackpad_split cirque_split
+#define remote_trackpad_listener cirque_rh_listener
+#include "examples/split/central.overlay"

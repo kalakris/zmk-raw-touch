@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2026 Mrinal Kalakrishnan
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Go60 glue shared by both halves of the CI build, not part of any example.
+ * The board DTS configures its pad for the Cirque driver MoErgo's ZMK
+ * ships (Pete Johanson's cirque-input-module). The in-tree driver this
+ * build uses has different property names, and edtlib rejects properties
+ * a binding does not declare, so that driver's are deleted and the
+ * data-ready GPIO is set under its in-tree name.
+ * Orientation is NOT set here: the examples declare it on the raw-touch pad
+ * node.
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+&glidepoint {
+    /delete-property/ dr-gpios;
+    /delete-property/ rotate-90;
+    /delete-property/ y-invert;
+    /delete-property/ no-secondary-tap;
+
+    data-ready-gpios = <&go60_ext 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+};

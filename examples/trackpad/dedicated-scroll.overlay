@@ -1,0 +1,14 @@
+&trackpad_listener {
+    /delete-node/ scroll;
+    input-processors = <&zip_raw_touch_scroll>,
+                       <&zip_xy_to_scroll_mapper>,
+                       <&zip_scroll_transform INPUT_TRANSFORM_Y_INVERT>,
+                       <&zip_scroll_scaler 1 32>,
+                       <&zip_raw_touch_idle_filter>;
+};
+
+&raw_touch_pad {
+    /* Every touch on this pad is scroll context, and the module drops
+     * taps from scroll-context touches unless this is set. */
+    tap-click-while-scrolling;
+};

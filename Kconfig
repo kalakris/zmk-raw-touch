@@ -1,0 +1,162 @@
+# Copyright (c) 2026 Mrinal Kalakrishnan
+# SPDX-License-Identifier: MIT
+
+menu "Raw touch frames"
+
+config ZMK_RAW_TOUCH
+    bool "Stream raw absolute touch frames over a vendor HID report"
+    default y
+    depends on DT_HAS_ZMK_RAW_TOUCH_PAD_ENABLED
+    depends on ZMK_POINTING
+    # The feature report publishes the SoC's hwinfo device id, so a host
+    # can recognize one keyboard across USB and Bluetooth. Without a
+    # HWINFO driver the field is simply reported as unknown, but the call
+    # has to link.
+    select HWINFO
+    help
+      Stream absolute touch frames (position + touch strength) from a
+      trackpad running in absolute mode to the host over a vendor-defined
+      HID report on its own HID interface / HIDS instance, so no fork of
+      ZMK core is required.
+
+      Relative deltas derived from successive frames are always re-injected
+      into the pad's normal input listener chain as well, so ordinary
+      pointing (and any keymap wheel-mapping overlays) keep working with
+      no host software at all (Standard mode). Frames are only emitted
+      while a host holds a lease on them (RawTouch mode).
+
+      Configure pads with zmk,raw-touch-pad devicetree nodes.
+
+if ZMK_RAW_TOUCH
+
+config ZMK_RAW_TOUCH_USB
+    bool "Send raw touch frames over USB"
+    default y
+    depends on ZMK_USB
+    # Only the central half talks to the host. The core ZMK_RAW_TOUCH symbol
+    # needs no such dependency: the pad nodes that enable it belong on the
+    # central, and a build with no transport at all still links against a
+    # no-op send (src/raw_touch_endpoints.c) and keeps Standard mode.
+    depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
+    help
+      Registers a SECOND USB HID interface (HID_1) carrying only the raw
+      touch report. Requires CONFIG_USB_HID_DEVICE_COUNT >= 2.
+
+config ZMK_RAW_TOUCH_USB_QUEUE_SIZE
+    int "Max number of raw touch reports to queue for sending over USB"
+    default 4
+    range 2 255
+    depends on ZMK_RAW_TOUCH_USB
+    help
+      Frames waiting for the interrupt IN endpoint.
+
+      The endpoint carries one transfer at a time and the queue is drained
+      by transfer completion, so it only has to cover what can pile up
+      within one host poll interval: the other pad sampling at the same
+      moment, or a peripheral pad's frames arriving from the split link in
+      a burst. 4 covers both with room to spare. A deeper queue would only
+      add latency - a frame the host receives late is worth less than the
+      fresh one behind it.
+
+      When the queue is full the oldest MOTION frame is evicted; release
+      frames (touched = 0) are never evicted, because losing one leaves the
+      host holding a finger-down until its silence watchdog fires. If no
+      entry can be evicted, the incoming frame is dropped - even a release
+      - and the log warns that the queue is full of undelivered release
+      frames. Raise this if you see that warning: it means more pads than
+      the queue can hold.
+
+config ZMK_RAW_TOUCH_BLE
+    bool "Send raw touch frames over BLE"
+    default y
+    depends on ZMK_BLE
+    depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
+    help
+      Registers a SECOND HID-over-GATT (HIDS) service instance carrying
+      only the raw touch report.
+
+      NOTE: host support for two HIDS instances on one peripheral is not
+      universal. If your host ignores the second service, disable this and
+      use USB for the raw frames; Standard mode still works over BLE.
+
+# Hidden: some host-facing transport is built, i.e. there is a host to
+# lease the stream, read the feature report and receive frames. Off on a
+# split peripheral and when both transports are disabled.
+config ZMK_RAW_TOUCH_HOST_TRANSPORT
+    def_bool ZMK_RAW_TOUCH_USB || ZMK_RAW_TOUCH_BLE
+
+config ZMK_RAW_TOUCH_BLE_QUEUE_SIZE
+    int "Max number of raw touch reports to queue for sending over BLE"
+    default 8
+    range 2 255
+    depends on ZMK_RAW_TOUCH_BLE
+    help
+      Frames waiting for a BLE connection event.
+
+      Sized to cover arrival batching, not to buffer a backlog. Frames are
+      ~10 ms apart and a host collects them in bursts about one connection
+      interval wide (~15 ms on macOS), so 8 frames is ~80 ms of slack -
+      several intervals' worth. A frame older than that is useless for
+      scrolling: the host reconstructs motion from the device timestamps in
+      the frames it does get, and a stale position only delays the fresh
+      one behind it.
+
+      When the queue is full the oldest MOTION frame is evicted; release
+      frames (touched = 0) are never evicted and are retried on a transient
+      notify error. If no entry can be evicted, the incoming frame is
+      dropped - even a release, which leaves the host holding a
+      finger-down until its silence watchdog fires - and the log warns
+      that the queue is full of undelivered release frames. A smaller
+      queue makes that more likely. Raise this if you see that warning: it
+      means more pads than the queue can hold.
+
+endif # ZMK_RAW_TOUCH
+
+config ZMK_INPUT_PROCESSOR_RAW_TOUCH_SCROLL
+    bool "Raw touch scroll-context marker input processor"
+    default y
+    depends on DT_HAS_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SCROLL_ENABLED
+    depends on ZMK_POINTING
+    help
+      A pass-through processor whose presence in the chain handling a
+      pad's events marks those frames as scroll context (frame flags
+      bit 1). Place it first in the chain.
+
+config ZMK_INPUT_PROCESSOR_RAW_TOUCH_IDLE_FILTER
+    bool "Raw touch idle-sync filter input processor"
+    default y
+    depends on DT_HAS_ZMK_INPUT_PROCESSOR_RAW_TOUCH_IDLE_FILTER_ENABLED
+    depends on ZMK_POINTING
+    help
+      Drops sync events that accumulated no host-visible change, so an
+      absolute-mode pad streaming at ~100 Hz does not also emit ~100 Hz
+      all-zero mouse HID reports (which on BLE compete with the raw
+      frames for connection events).
+
+config ZMK_INPUT_PROCESSOR_RAW_TOUCH_SPLIT_STAMP
+    bool "Peripheral sample-time stamp for relayed raw touch pads"
+    default y
+    depends on DT_HAS_ZMK_INPUT_PROCESSOR_RAW_TOUCH_SPLIT_STAMP_ENABLED
+    # Peripheral-only: it reports through the split link's peripheral API,
+    # which does not exist on the central. The central side needs nothing
+    # enabled - raw_touch.c always understands the stamp.
+    depends on ZMK_INPUT_SPLIT && !ZMK_SPLIT_ROLE_CENTRAL
+    help
+      Chained on a split peripheral's zmk,input-split relay, sends the
+      peripheral's own sample time along with every absolute frame, so a
+      relayed pad's frame timestamps stop carrying the split link's
+      delivery jitter (up to one poll cycle on a polled wired link).
+
+module = ZMK_RAW_TOUCH
+module-str = ZMK_RAW_TOUCH
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
+
+endmenu
+
+# The raw touch report needs a second USB HID interface alongside ZMK's.
+# Module Kconfig is sourced before Zephyr's subsys/, so this default takes
+# precedence over the subsystem's own default of 1; an application .conf
+# that pins the symbol lower still wins, which raw_touch_usb_hid.c
+# BUILD_ASSERTs against.
+config USB_HID_DEVICE_COUNT
+    default 2 if ZMK_RAW_TOUCH_USB
